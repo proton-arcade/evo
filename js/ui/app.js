@@ -189,7 +189,18 @@
         body.appendChild(child);
         return child;
       };
+      panel.clear = function () {
+        UI.clear(body);
+      };
       return panel;
+    },
+
+    /** A small key/value line, used by information panels. */
+    infoRow: function (label, value, className) {
+      var row = UI.el('div', 'info-row' + (className ? ' ' + className : ''));
+      row.appendChild(UI.el('span', 'info-label', label));
+      row.appendChild(UI.el('span', 'info-value', value === undefined || value === null ? '—' : String(value)));
+      return row;
     },
 
     /** A row of buttons. */
@@ -277,10 +288,63 @@
   };
 
   /* ================================================================== *
+   * Files (export and import)
+   * ================================================================== */
+  var Files = {
+    /** Offers a JSON (or text) string as a download. */
+    download: function (filename, text, type) {
+      var blob = new Blob([text], { type: type || 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(function () {
+        URL.revokeObjectURL(url);
+      }, 1000);
+    },
+
+    /** Shows a file picker and hands the text of the chosen file back. */
+    open: function (accept, onLoaded) {
+      var input = UI.el('input');
+      input.type = 'file';
+      input.accept = accept || 'application/json,.json';
+      input.style.display = 'none';
+      input.addEventListener('change', function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function () {
+          onLoaded(String(reader.result), file.name);
+        };
+        reader.onerror = function () {
+          Modal.alert('The file could not be read.', 'Import failed');
+        };
+        reader.readAsText(file);
+      });
+      document.body.appendChild(input);
+      input.click();
+      setTimeout(function () {
+        if (input.parentNode) input.parentNode.removeChild(input);
+      }, 1000);
+    },
+  };
+
+  /* ================================================================== *
    * Storage of designs, recordings and simulations
    * ================================================================== */
   function makeId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
+  }
+
+  /** Human readable byte sizes. */
+  function formatBytes(bytes) {
+    if (!isFinite(bytes) || bytes <= 0) return '0 KB';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
   }
 
   var Storage = {
@@ -392,6 +456,75 @@
       });
       Store.setJSON('simulations', simulations);
     },
+
+    /* --- Everything at once ----------------------------------------- */
+    /** Readable names for the keys that the game stores. */
+    keyDescription: function (key) {
+      var names = {
+        designs: 'saved creatures',
+        recordings: 'gallery recordings',
+        simulations: 'saved simulations',
+        LAST_CREATURE_DESIGN_KEY: 'the creature you are working on',
+        EVOLUTION_SETTINGS: 'evolution settings',
+        'NEURAL NETWORK SETTINGS': 'network settings',
+        EDITOR_SETTINGS_KEY: 'editor settings',
+      };
+      return names[key] || key;
+    },
+
+    /** Everything the game keeps, as one portable document. */
+    exportAll: function () {
+      var data = {};
+      Store.keys().forEach(function (key) {
+        var value = Store.getString(key, null);
+        if (value === null || value === undefined) return;
+        data[key] = value;
+      });
+      return {
+        format: 'evolution-web-backup',
+        version: 1,
+        createdAt: new Date().toISOString(),
+        data: data,
+      };
+    },
+
+    /** Writes a document created by `exportAll` back into the storage. */
+    importAll: function (backup, overwrite) {
+      if (!backup || typeof backup !== 'object' || !backup.data) {
+        throw new Error('This file does not contain an Evolution backup.');
+      }
+      var data = backup.data;
+      var imported = [];
+      Object.keys(data).forEach(function (key) {
+        if (!overwrite && Store.getString(key, null) !== null) return;
+        Store.setString(key, data[key]);
+        imported.push(key);
+      });
+      return imported;
+    },
+
+    downloadBackup: function () {
+      Files.download('evolution-backup.json', JSON.stringify(this.exportAll(), null, 2));
+    },
+
+    /** How much of the data is mirrored into cookies. */
+    backupReport: function () {
+      var coverage = Store.cookieCoverage();
+      var status = Store.mirrorStatus();
+      var tooBig = [];
+      var partial = [];
+      Object.keys(status).forEach(function (key) {
+        if (status[key] === 'too-big') tooBig.push(key);
+        if (status[key] === 'partial') partial.push(key);
+      });
+      return {
+        coverage: coverage,
+        tooBig: tooBig,
+        partial: partial,
+        usage: Store.cookieUsage(),
+        bytes: Store.usage(),
+      };
+    },
   };
 
   /* ================================================================== *
@@ -408,11 +541,23 @@
       EVO.Screens[name] = screen;
     },
 
+    /** Names of the screens, used by the "continue" card. */
+    SCREEN_TITLES: {
+      home: 'Home',
+      editor: 'Creature editor',
+      creatures: 'My creatures',
+      simulation: 'Simulation',
+      gallery: 'Gallery',
+      settings: 'Settings',
+      help: 'Help',
+    },
+
     start: function () {
       this.root = document.getElementById('screens');
       if (!this.root) {
         this.root = document.body;
       }
+      this.loadLastDesign();
       this.show('home');
       var resizeCurrent = function () {
         if (App.current && App.current.resize) App.current.resize();
@@ -467,6 +612,38 @@
       screen.element.classList.add('visible');
       if (screen.show) screen.show(params || {});
       if (screen.resize) screen.resize();
+
+      // Remember where the game was left so that the home screen can offer
+      // to continue there (see the "Remember where I left off" setting).
+      if (Settings.RememberLastScreen) {
+        Settings.LastScreen = name;
+        Settings.LastScreenTitle = this.SCREEN_TITLES[name] || name;
+      }
+    },
+
+    /** Loads the creature that was edited last, if there is one. */
+    loadLastDesign: function () {
+      var stored = Settings.LastCreatureDesign;
+      if (!stored) return null;
+      try {
+        this.currentDesign = EVO.CreatureDesign.decode(JSON.parse(stored));
+      } catch (error) {
+        this.currentDesign = null;
+      }
+      return this.currentDesign;
+    },
+
+    /** The screen to offer on the home screen, or null. */
+    resumableScreen: function () {
+      if (!Settings.RememberLastScreen) return null;
+      var name = Settings.LastScreen;
+      if (!name || name === 'home') return null;
+      if (name !== 'editor' && name !== 'creatures' && name !== 'gallery') return null;
+      if (!EVO.Screens[name]) return null;
+      return {
+        name: name,
+        title: Settings.LastScreenTitle || this.SCREEN_TITLES[name] || name,
+      };
     },
 
     getDesign: function () {
@@ -524,14 +701,24 @@
 
       content.appendChild(actions);
 
+      var resume = this.buildResumeCard();
+      if (resume) content.appendChild(resume);
+
       var info = UI.el('div', 'home-info');
       var design = App.currentDesign;
       var summary = design
-        ? design.joints.length + ' joints · ' + design.bones.length + ' bones · ' + design.muscles.length + ' muscles'
+        ? (design.name ? design.name + ' — ' : '') +
+          design.joints.length + ' joints · ' + design.bones.length + ' bones · ' + design.muscles.length + ' muscles'
         : 'No creature design loaded';
       info.appendChild(UI.el('div', 'home-info-title', 'Current design'));
       info.appendChild(UI.el('div', 'home-info-sub', summary));
       content.appendChild(info);
+
+      var storageNote = UI.el('div', 'home-storage-note');
+      storageNote.appendChild(
+        UI.el('span', 'footer-note', HomeScreen.storageSummary())
+      );
+      content.appendChild(storageNote);
 
       element.appendChild(content);
       element.appendChild(this.buildFooter());
@@ -570,6 +757,47 @@
       button.appendChild(UI.el('span', 'home-button-sub', subtitle));
       button.addEventListener('click', onClick);
       return button;
+    },
+
+    /** The "continue where you left off" card. */
+    buildResumeCard: function () {
+      var screen = App.resumableScreen();
+      if (!screen) return null;
+      var card = UI.el('div', 'home-resume');
+      var main = UI.el('div', 'home-resume-main');
+      main.appendChild(UI.el('div', 'home-resume-title', 'Continue where you left off'));
+      main.appendChild(UI.el('div', 'home-resume-sub', screen.title));
+      card.appendChild(main);
+      var button = UI.el('button', 'evo-button primary', 'Resume');
+      button.addEventListener('click', function () {
+        App.show(screen.name, screen.name === 'editor' ? { design: null } : {});
+      });
+      card.appendChild(button);
+      var dismiss = UI.el('button', 'home-resume-dismiss', '\u00D7');
+      dismiss.title = 'Hide';
+      dismiss.addEventListener('click', function () {
+        Settings.LastScreen = 'home';
+        if (card.parentNode) card.parentNode.removeChild(card);
+      });
+      card.appendChild(dismiss);
+      return card;
+    },
+
+    /** One line about where the data of this game is kept. */
+    storageSummary: function () {
+      if (Store.backend === 'memory') {
+        return 'This browser does not allow any storage, so nothing is kept — use Export to save your creatures as files.';
+      }
+      var report = Storage.backupReport();
+      var text = Store.backend === 'localStorage' ? 'Saved in this browser' : 'Saved in cookies';
+      text += ' · ' + formatBytes(report.bytes);
+      if (Store.cookieAvailable && Settings.CookieBackup) {
+        text +=
+          ' · cookie backup: ' + report.coverage.backed + ' of ' + report.coverage.total + ' entries';
+      } else if (!Store.cookieAvailable) {
+        text += ' · cookies are unavailable, use Export for a backup';
+      }
+      return text;
     },
   };
 
@@ -820,7 +1048,286 @@
           },
         }).element
       );
+      saving.add(
+        Widgets.toggle({
+          label: 'Remember where I left off',
+          value: Settings.RememberLastScreen,
+          onChange: function (value) {
+            Settings.RememberLastScreen = value;
+          },
+        }).element
+      );
+      saving.add(
+        UI.el(
+          'p',
+          'panel-note',
+          'The creature you are working on is saved continuously, so it is still there after a reload.'
+        )
+      );
       content.appendChild(saving);
+
+      /* --- Storage & cookies ---------------------------------------- */
+      var storage = Widgets.panel('Storage & cookies');
+      content.appendChild(storage);
+
+      var refreshStorage = function () {
+        storage.clear();
+        var report = Storage.backupReport();
+        var backendLabel =
+          Store.backend === 'localStorage'
+            ? 'Browser storage (localStorage)'
+            : Store.backend === 'cookies'
+            ? 'Cookies (no browser storage)'
+            : 'This session only — nothing is kept';
+
+        storage.add(Widgets.infoRow('Kept in', backendLabel));
+        storage.add(
+          Widgets.infoRow(
+            'Your data',
+            formatBytes(report.bytes) + ' · ' + report.coverage.total + ' entries'
+          )
+        );
+        storage.add(
+          Widgets.infoRow(
+            'Cookies',
+            Store.cookieAvailable
+              ? report.usage.cookies +
+                  ' of ' +
+                  report.usage.maxCookies +
+                  ' · ' +
+                  formatBytes(report.usage.bytes) +
+                  ' (' +
+                  Store.cookieBudgetLabel() +
+                  ')'
+              : 'not available in this browser'
+          )
+        );
+
+        if (Settings.CookieBackup && Store.cookieAvailable) {
+          storage.add(
+            Widgets.toggle({
+              label: 'Keep a copy in cookies',
+              value: true,
+              onChange: function (value) {
+                Settings.CookieBackup = value;
+                if (value) {
+                  Store.backupToCookies();
+                  refreshStorage();
+                  return;
+                }
+                Modal.open({
+                  title: 'Stop keeping a copy in cookies?',
+                  message:
+                    'Your creatures and settings are then only kept in the storage of this browser. ' +
+                    'The cookies that were already written stay until you clear them.',
+                  actions: [
+                    {
+                      label: 'Keep backing up',
+                      onClick: function () {
+                        Settings.CookieBackup = true;
+                        refreshStorage();
+                      },
+                    },
+                    {
+                      label: 'Turn off',
+                      primary: true,
+                      onClick: function () {
+                        refreshStorage();
+                      },
+                    },
+                  ],
+                });
+              },
+            }).element
+          );
+          storage.add(
+            Widgets.dropdown({
+              label: 'Cookie budget',
+              value: Store.cookieBudget(),
+              options: Object.keys(EVO.COOKIE_BUDGETS).map(function (key) {
+                return { value: key, label: EVO.COOKIE_BUDGETS[key].label };
+              }),
+              onChange: function (value) {
+                Settings.CookieBudget = value;
+                Store.setCookieBudget(value);
+                refreshStorage();
+              },
+            }).element
+          );
+          storage.add(
+            Widgets.buttonRow([
+              {
+                label: 'Back up now',
+                onClick: function () {
+                  var result = Store.backupToCookies();
+                  refreshStorage();
+                  var message =
+                    result.copied + ' entries were copied into cookies.' +
+                    (result.partial.length ? ' ' + result.partial.length + ' only partly (the newest entries).' : '') +
+                    (result.skipped.length ? ' ' + result.skipped.length + ' did not fit.' : '');
+                  Modal.alert(message, 'Cookie backup');
+                },
+              },
+              {
+                label: 'Restore',
+                onClick: function () {
+                  Modal.confirm(
+                    'Replace the data in this browser with the copy that is kept in cookies?',
+                    function () {
+                      var count = Store.restoreFromCookies(true);
+                      App.loadLastDesign();
+                      refreshStorage();
+                      Modal.alert(count + ' entries were restored from the cookies.', 'Restored');
+                    },
+                    'Restore'
+                  );
+                },
+              },
+              {
+                label: 'Clear cookies',
+                className: 'danger',
+                onClick: function () {
+                  Modal.confirm(
+                    'Delete the cookie copy of your creatures, recordings and settings?',
+                    function () {
+                      Store.clearCookies();
+                      refreshStorage();
+                    },
+                    'Clear'
+                  );
+                },
+              },
+            ], 'compact')
+          );
+        } else {
+          storage.add(
+            Widgets.toggle({
+              label: 'Keep a copy in cookies',
+              value: false,
+              onChange: function (value) {
+                Settings.CookieBackup = value;
+                if (value) {
+                  Store.backupToCookies();
+                }
+                refreshStorage();
+              },
+            }).element
+          );
+        }
+
+        storage.add(
+          Widgets.buttonRow([
+            {
+              label: 'Export all data',
+              onClick: function () {
+                Storage.downloadBackup();
+                Modal.alert(
+                  'A file with all of your creatures, recordings, simulations and settings was downloaded.',
+                  'Exported'
+                );
+              },
+            },
+            {
+              label: 'Import a backup',
+              onClick: function () {
+                Files.open('application/json,.json', function (text) {
+                  var backup;
+                  try {
+                    backup = JSON.parse(text);
+                  } catch (error) {
+                    Modal.alert('That file is not valid JSON.', 'Import failed');
+                    return;
+                  }
+                  if (!backup || !backup.data) {
+                    Modal.alert('That file does not contain an Evolution backup.', 'Import failed');
+                    return;
+                  }
+                  var keys = Object.keys(backup.data);
+                  Modal.open({
+                    title: 'Import backup',
+                    message:
+                      'The backup contains ' +
+                      keys.length +
+                      ' entries (creatures, recordings, simulations and settings).',
+                    actions: [
+                      { label: 'Cancel' },
+                      {
+                        label: 'Add to my data',
+                        onClick: function () {
+                          var imported = Storage.importAll(backup, false);
+                          App.loadLastDesign();
+                          Modal.alert(imported.length + ' entries were added.', 'Imported');
+                          App.show('settings');
+                        },
+                      },
+                      {
+                        label: 'Replace everything',
+                        primary: true,
+                        onClick: function () {
+                          var imported = Storage.importAll(backup, true);
+                          App.loadLastDesign();
+                          Modal.alert(imported.length + ' entries were restored.', 'Imported');
+                          App.show('settings');
+                        },
+                      },
+                    ],
+                  });
+                });
+              },
+            },
+          ], 'compact')
+        );
+
+        var notes = [];
+        if (!Store.cookieAvailable) {
+          notes.push(
+            'This browser does not allow cookies for this page, so nothing can be kept outside of the browser storage.'
+          );
+        } else if (Settings.CookieBackup) {
+          if (report.coverage.missing.length) {
+            notes.push(
+              'Not in the cookie backup: ' +
+                report.coverage.missing
+                  .map(function (key) {
+                    return Storage.keyDescription(key);
+                  })
+                  .join(', ') +
+                '.'
+            );
+          }
+          if (report.partial.length) {
+            notes.push(
+              'Only the newest entries of ' +
+                report.partial
+                  .map(function (key) {
+                    return Storage.keyDescription(key);
+                  })
+                  .join(', ') +
+                ' fit into the cookies.'
+            );
+          }
+          if (Store.backend === 'cookies') {
+            notes.push('Cookies are the only storage of this browser — keep the backup file as well.');
+          }
+        } else if (Store.cookieAvailable) {
+          notes.push(
+            'The cookie copy is turned off, so your data is only kept in the storage of this browser.'
+          );
+        }
+        if (Store.quotaExceeded) {
+          notes.push('The last change did not fit into the storage — export a backup and delete old recordings.');
+        }
+        if (!notes.length) {
+          notes.push('Everything you saved is also kept in the cookies of this browser.');
+        }
+        notes.push(
+          'Cookies are small (a few kilobytes each). Use "Export all data" for a backup that keeps everything.'
+        );
+        notes.forEach(function (note) {
+          storage.add(UI.el('p', 'panel-note', note));
+        });
+      };
+      refreshStorage();
 
       var data = Widgets.panel('Data');
       data.add(
@@ -828,28 +1335,14 @@
           {
             label: 'Reset all settings',
             onClick: function () {
-              Modal.confirm('Reset all settings to their defaults?', function () {
-                [
-                  'showMuscleContraction',
-                  'SHOW_MUSCLES_KEY',
-                  'SHOW_ONE_AT_ATIME_KEY',
-                  'HIDDEN_CREATURE_OPACITY_KEY',
-                  'DEFAULT_GRID_VISIBILITY_KEY',
-                  'FLYING_GRID_VISIBILITY_KEY',
-                  'GRID_ENABLED',
-                  'GRID_SIZE',
-                  'LANGUAGE_KEY',
-                  'SHOW_ONBOARDING_KEY',
-                  'AUTO_SAVE_ENABLED_KEY',
-                  'AUTO_SAVE_DISTANCE_KEY',
-                  'EVOLUTION_SETTINGS',
-                  'NEURAL NETWORK SETTINGS',
-                  'EDITOR_SETTINGS_KEY',
-                ].forEach(function (key) {
-                  Store.remove(key);
-                });
-                App.show('settings');
-              });
+              Modal.confirm(
+                'Reset all settings to their defaults? Your creatures, recordings and simulations are kept.',
+                function () {
+                  Settings.reset();
+                  App.show('settings');
+                },
+                'Reset settings'
+              );
             },
           },
           {
@@ -857,11 +1350,12 @@
             className: 'danger',
             onClick: function () {
               Modal.confirm(
-                'Delete all saved creatures, recordings and simulations?',
+                'Delete all saved creatures, recordings and simulations — in the browser and in the cookies?',
                 function () {
                   Store.setJSON('designs', []);
                   Store.setJSON('recordings', []);
                   Store.setJSON('simulations', []);
+                  refreshStorage();
                 },
                 'Delete everything'
               );
@@ -873,9 +1367,10 @@
         UI.el(
           'p',
           'panel-note',
-          EVO.Store.available
-            ? 'Your data is stored locally in this browser.'
-            : 'Warning: this browser does not allow local storage for this page, so nothing can be saved.'
+          Store.available
+            ? 'Your data never leaves this browser: it is stored locally' +
+              (Store.cookieAvailable ? ', with a copy in the cookies of this page.' : '.')
+            : 'Warning: this browser does not allow storage for this page, so nothing can be saved. Use Export to keep your creatures as files.'
         )
       );
       content.appendChild(data);
@@ -886,72 +1381,10 @@
 
   /* ================================================================== *
    * Help screen
+   *
+   * The content of the help area lives in js/ui/help.js — it is a small
+   * manual of everything in the game.
    * ================================================================== */
-  var HelpScreen = {
-    show: function () {
-      var element = this.element;
-      element.appendChild(topBar('Help', function () { App.show('home'); }));
-      var content = UI.el('div', 'list-content help-content');
-
-      var sections = [
-        {
-          title: 'What is this?',
-          body:
-            'Evolution is a simulator that lets you design a creature out of joints, bones and muscles, ' +
-            'and then evolves a neural network that teaches it to walk, jump, climb or fly. ' +
-            'It is based on Karl Sims\' "Evolving Virtual Creatures" and on the original game by Keiwan Donyagard.',
-        },
-        {
-          title: 'Designing a creature',
-          body:
-            'Place joints with the joint tool, connect them with bones and add muscles between two bones. ' +
-            'Muscles contract or expand depending on the output of the creature\'s brain. ' +
-            'Use the settings panel to change weights, muscle strengths and to mark bones as wings.',
-        },
-        {
-          title: 'How the evolution works',
-          body:
-            'Every generation consists of a population of creatures. Each creature\'s brain is a small ' +
-            'feed forward neural network whose weights are the creature\'s genome. After each generation the ' +
-            'best creatures are selected and their genomes are recombined and mutated to form the next generation. ' +
-            'The fitness function depends on the task: running rewards horizontal distance, jumping the maximum ' +
-            'height, climbing the vertical distance, flying the time spent above the ground and the height, ' +
-            'and the obstacle jump rewards jumping over the rolling obstacles without touching them.',
-        },
-        {
-          title: 'Brain inputs',
-          body:
-            'New simulations use the universal brain with 11 inputs: the distance to the ground, four distance ' +
-            'sensors (forward, down-forward, down-back, back), one freely rotating sensor, the velocity, the ' +
-            'angular velocity, the number of joints touching the ground and the rotation of the creature. ' +
-            'Additionally, the network has one output per unique muscle id (muscles sharing an id are ' +
-            'controlled together).',
-        },
-        {
-          title: 'Keyboard, mouse and touch',
-          body:
-            'Drag with the left mouse button to pan, use the scroll wheel or a pinch gesture to zoom. ' +
-            'On touch screens, drag with one finger to pan and use two fingers to pan and zoom. In the editor, ' +
-            'drag from one joint to another to create a bone and from one bone to another to create a muscle. ' +
-            'The space bar pauses the simulation.',
-        },
-        {
-          title: 'Gallery',
-          body:
-            'Whenever a generation is evaluated, a recording of the best creature is kept. You can play back the ' +
-            'best creatures of all previous generations and save your favourites to the gallery.',
-        },
-      ];
-
-      sections.forEach(function (section) {
-        var panel = Widgets.panel(section.title);
-        panel.add(UI.el('p', 'panel-note', section.body));
-        content.appendChild(panel);
-      });
-
-      element.appendChild(content);
-    },
-  };
 
   /* ================================================================== *
    * Shared simulation settings panel (used by the settings screen and the
@@ -1181,12 +1614,12 @@
   EVO.Widgets = Widgets;
   EVO.Modal = Modal;
   EVO.Storage = Storage;
+  EVO.Files = Files;
   EVO.App = App;
   EVO.Screens = EVO.Screens || {};
   EVO.Screens.home = HomeScreen;
   EVO.Screens.creatures = CreaturesScreen;
   EVO.Screens.settings = SettingsScreen;
-  EVO.Screens.help = HelpScreen;
   EVO.SimulationSettingsPanel = SimulationSettingsPanel;
   EVO.makeId = makeId;
 

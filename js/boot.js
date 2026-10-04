@@ -46,6 +46,7 @@
       'Add muscles between two bones. Each muscle contracts or expands depending on the output of the creature\'s brain.',
       'Choose a task in the simulation (running, jumping, obstacle jumping, climbing or flying), press play and watch the population evolve.',
       'The best creature of every generation is recorded — you can watch it again in the gallery or save its design.',
+      'Everything you create is stored in this browser (and in a cookie copy) as you work, so it is still there after a reload. Help → Saving, cookies & files explains it.',
     ];
     paragraphs.forEach(function (text) {
       content.appendChild(UI.el('p', 'modal-message', text));
@@ -67,23 +68,64 @@
     EVO.Modal.root.querySelector('.modal-body').appendChild(toggle.element);
   }
 
+  /**
+   * If the browser storage is empty but the cookies still hold a copy of the
+   * data (because the browser cleared the storage, or because the folder was
+   * moved), the cookie copy is read back.
+   */
+  function restoreFromCookieBackup() {
+    var Store = EVO.Store;
+    if (!Store.cookieAvailable || Store.backend !== 'localStorage') return 0;
+    if (Store.primaryKeys().length) return 0;
+    var restored = Store.restoreFromCookies(true);
+    if (restored > 0) {
+      EVO.App.loadLastDesign();
+      EVO.Modal.open({
+        title: 'Your data is back',
+        message:
+          'The browser storage of this page was empty, so ' +
+          restored +
+          (restored === 1 ? ' entry was' : ' entries were') +
+          ' restored from the cookie copy: your creatures, recordings, simulations and settings.',
+        actions: [{ label: 'OK', primary: true }],
+      });
+    }
+    return restored;
+  }
+
+  function showStorageNotice() {
+    var Store = EVO.Store;
+    if (Store.backend === 'memory') {
+      EVO.Modal.open({
+        title: 'Nothing can be saved',
+        message:
+          'This browser does not allow any storage for this page and it does not allow cookies ' +
+          'either, so your creatures and simulations can only be saved as files. ' +
+          'Use Export in the editor to keep a design. Everything else works normally.',
+        actions: [{ label: 'OK', primary: true }],
+      });
+    } else if (Store.backend === 'cookies') {
+      EVO.Modal.open({
+        title: 'Saving in cookies',
+        message:
+          'This browser does not allow local storage for this page, so everything is kept in the ' +
+          'cookies instead. Cookies are small: long recordings and big simulations may not fit. ' +
+          'Use Export all data in the settings for a complete backup.',
+        actions: [{ label: 'OK', primary: true }],
+      });
+    }
+  }
+
   function start() {
     try {
+      restoreFromCookieBackup();
       EVO.App.start();
 
       if (EVO.Settings.ShowOnboarding) {
         showOnboarding();
       }
 
-      if (!EVO.Store.available) {
-        EVO.Modal.open({
-          title: 'Storage unavailable',
-          message:
-            'This browser does not allow local storage for pages that are opened from the file system, ' +
-            'so your creatures and simulations can only be saved as files. Everything else works normally.',
-          actions: [{ label: 'OK', primary: true }],
-        });
-      }
+      showStorageNotice();
     } catch (error) {
       showFatalError('The application could not be started.', error && error.stack ? error.stack : error);
     }

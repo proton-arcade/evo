@@ -14,8 +14,9 @@ package manager and no network access required.
 
 1. Download or copy this folder.
 2. Open `index.html` with Chrome, Firefox, Edge, Safari or any other modern browser.
-3. (Optional) If your browser restricts local storage for `file://` pages, everything still works —
-   only the in-browser save slots are disabled and you are asked to save as files instead.
+3. Nothing is uploaded anywhere: creatures, recordings, simulations and settings are kept in your
+   browser (and, if you like, in a cookie copy — see [Saving, cookies and
+   files](#saving-cookies-and-files)).
 
 ### First steps
 
@@ -23,8 +24,9 @@ package manager and no network access required.
 * **Start Simulation** — evolve a brain for the current design.
 * **My Creatures** — your saved designs (and the five samples: FROGGER, ROO, HAILER, SPIDER, SPRING).
 * **Gallery** — replays of the best creature of every saved generation.
-* **Settings** — display, evolution and neural-network settings.
-* **Help** — a short explanation of the simulation.
+* **Settings** — display, evolution, neural-network, saving and storage settings.
+* **Help** — a complete manual of the game: every screen, tool, property, setting, shortcut and
+  formula, with a search box.
 
 ---
 
@@ -98,7 +100,9 @@ is needed; the same `index.html` can be opened locally.
 
 ---
 
-## Saving and loading
+## Saving, cookies and files
+
+Everything the game keeps is stored on your device — there is no server and no account.
 
 * **Creatures** — saved in the browser and exported/imported as JSON files.
 * **Recordings** — the best creature of a generation can be saved to the gallery, played back and
@@ -109,6 +113,31 @@ is needed; the same `index.html` can be opened locally.
 * All JSON formats (`v1`, `v2` and `v3`) are compatible with the save files of the Unity version of
   Evolution, so designs and simulations can be moved between the two.
 
+### The cookie copy
+
+On top of the browser storage (`localStorage`) every value is mirrored into **cookies**:
+
+* values are encoded as base64url and split into cookies of about 1.4 KB, so even a large design
+  fits into the 4 KB that a single cookie may hold;
+* the size of the whole backup is capped by a budget (Small ~11 KB, Medium ~22 KB, Large ~56 KB,
+  Maximum ~125 KB). A page opened from the file system starts at *Large*, a page on a web server at
+  *Small* — because cookies are sent to the server with every request;
+* when a list does not fit, the newest entries are kept (recordings first, then simulations);
+* if the browser storage is missing or was cleared, the cookie copy is read back automatically the
+  next time the game starts;
+* **Settings → Storage & cookies** shows where the data lives, how much space is used, and offers
+  *Back up now*, *Restore*, *Clear cookies*, *Export all data* and *Import a backup*.
+
+Cookies are small, so a long recording or a big simulation will not fit into them. Use
+**Export all data** (one JSON file with every creature, recording, simulation and setting) for a
+backup that keeps everything.
+
+### Continuing where you left off
+
+The creature you are editing is saved continuously, and the game remembers the screen you were on.
+The home screen then shows a *Continue where you left off* card (Settings → Saving → *Remember where
+I left off*).
+
 ---
 
 ## Project structure
@@ -116,7 +145,7 @@ is needed; the same `index.html` can be opened locally.
 ```
 index.html                  the app (loads the scripts in dependency order)
 css/style.css               all styles
-js/core/util.js             math helpers, capped display pixel ratio, touch gesture helpers, storage, settings and DOM helpers
+js/core/util.js             math helpers, capped display pixel ratio, touch gesture helpers, storage, cookies, settings and DOM helpers
 js/core/network.js          feed-forward neural networks and network settings
 js/core/algorithms.js       selection, recombination, mutation, objectives and fitness utilities
 js/core/data.js             creature designs, stats, recordings, save data and encoding/decoding
@@ -130,12 +159,29 @@ js/sim/evolution.js         the evolution loop (batches, evaluation, breeding)
 js/sim/playback.js          playback of recorded creatures
 js/render/decorations.js    the vector drawings of all decorations
 js/render/renderer.js       the canvas 2D renderer and the editor/simulation camera
-js/ui/app.js                screens, widgets, modals, storage and the home/creature/settings/help screens
+js/ui/app.js                screens, widgets, modals, storage and the home/creature/settings screens
 js/ui/editor.js             the creature editor
 js/ui/simulation.js         the simulation screen (HUD, playback, save/load)
 js/ui/gallery.js            the recording gallery
+js/ui/help.js               the help area (a searchable manual of the whole game)
 js/boot.js                  startup and error handling
 ```
+
+## Tests
+
+The tests are plain node scripts, there is no test runner and nothing to install:
+
+```
+node tests/cookie-store-test.js        # the chunked cookie backup
+node tests/ui-screens-smoke-test.js    # every screen builds, the help is complete
+node tests/editor-selection-tool-test.js
+node tests/muscle-bone-hit-test.js
+node tests/simulation-exit-test.js
+node tests/simulation-settings-dismiss-test.js
+```
+
+`tests/helpers/dom-stub.js` provides the small DOM (including a cookie jar and a canvas 2D stub)
+that the screen tests need.
 
 ---
 
