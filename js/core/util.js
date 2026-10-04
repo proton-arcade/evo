@@ -455,6 +455,13 @@
       Store.setBool('SKIP_GENERATION_RECAP_KEY', v);
     },
 
+    get AutoFlapEnabled() {
+      return Store.getBool('AUTO_FLAP_ENABLED_KEY', true);
+    },
+    set AutoFlapEnabled(v) {
+      Store.setBool('AUTO_FLAP_ENABLED_KEY', v);
+    },
+
     get HiddenCreatureOpacity() {
       return Store.getFloat('HIDDEN_CREATURE_OPACITY_KEY', 0.225);
     },

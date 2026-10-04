@@ -216,7 +216,7 @@
         {
           // This is only the initial visible stretch. More blocks are added
           // ahead of a moving creature, so there is no finish-line wall.
-          initialBlockCount: 5,
+          initialBlockCount: 15,
           lookAheadBlocks: 3,
           blockSpacing: 6.2,
           startWidth: 1.2,
@@ -386,9 +386,10 @@
   };
 
   /**
-   * Starts an obstacle course with a small visible stretch. Unlike the former
-   * fixed five-block course, this remembers its generation settings so it can
-   * keep adding blocks in front of a creature as it advances.
+   * Starts an obstacle course with a visible stretch of fifteen blocks.
+   * Unlike the former fixed five-block course, this remembers its
+   * generation settings so it can keep adding blocks in front of a
+   * creature as it advances.
    */
   Scene.prototype.buildObstacleBlockCourse = function (entry) {
     var transform = entry.transform;
@@ -397,7 +398,7 @@
     // `blockCount` was used by saved fixed-course scenes. Preserve it as the
     // number of initial blocks, but never let it become the course's end.
     if (initialCount === undefined) initialCount = params.blockCount;
-    if (initialCount === undefined) initialCount = 5;
+    if (initialCount === undefined) initialCount = 15;
 
     var course = {
       entry: entry,
@@ -420,7 +421,7 @@
     };
     this.obstacleBlockCourses.push(course);
 
-    initialCount = Utils.clamp(Math.round(initialCount), 1, 12);
+    initialCount = Utils.clamp(Math.round(initialCount), 1, 32);
     for (var i = 0; i < initialCount; i++) {
       this.addObstacleBlock(course);
     }

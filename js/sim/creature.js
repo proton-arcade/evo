@@ -59,6 +59,16 @@
     this.scene = options.scene || null;
     this.offsetsApplied = false;
     this.debugName = options.name || design.name || 'Unnamed';
+    // Built-in wing reflex: creatures with powered wings automatically know
+    // to flap while they are airborne or falling. Can be disabled per
+    // creature (the simulation HUD exposes a global toggle).
+    this.autoFlap = options.autoFlap !== false;
+    this.flapPhase = 0;
+    this.flapHold = 0;
+    // Shock state: while `shockTimer` is positive the creature is stunned —
+    // its brain and reflexes stop, its muscles relax and its motion decays,
+    // interrupting whatever it was doing.
+    this.shockTimer = 0;
 
     this._buildJoints();
     this._buildBones();
@@ -88,6 +98,18 @@
   Creature.WING_MAX_STROKE_FORCE = 220;
   Creature.WING_AERO_CENTER_FRACTION = 0.72;
   Creature.WING_MAX_ANGLE_OF_ATTACK = 80 * Utils.Deg2Rad;
+  // Automatic wing-flap reflex: wing-connected muscles are driven by a
+  // rhythmic oscillator (downstroke first) whenever the creature is
+  // airborne or falling, so a winged creature flaps without waiting for
+  // evolution to discover the behaviour.
+  Creature.AUTO_FLAP_FREQUENCY = 2.4;
+  Creature.AUTO_FLAP_FALL_SPEED = -0.25;
+  // Keep flapping for a short moment after touching down so a stroke is
+  // always finished instead of stuttering on bumpy ground contact.
+  Creature.AUTO_FLAP_HOLD = 0.35;
+  // Shock: duration of the stun and how quickly motion decays while stunned.
+  Creature.SHOCK_DURATION = 0.9;
+  Creature.SHOCK_DAMPING = 4.2;
   Creature.MuscleAction = MuscleAction;
 
   /* ------------------------------------------------------------------ *
@@ -206,6 +228,13 @@
       endBone.connectedMuscles.push(muscle);
       self.muscles.push(muscle);
     });
+
+    // Cache the muscles that can power a wing stroke (used by the built-in
+    // auto-flap reflex). A muscle counts when either of its bones is a wing.
+    this.wingMuscles = this.muscles.filter(function (muscle) {
+      return (muscle.startBone && muscle.startBone.isWing) ||
+        (muscle.endBone && muscle.endBone.isWing);
+    });
   };
 
   Creature.prototype._buildDecorations = function () {
@@ -279,6 +308,9 @@
     this.maxJumpingHeight = 0;
     this.jointIdsWithPenalty = Object.create(null);
     this.containsPenaltyJoints = false;
+    this.shockTimer = 0;
+    this.flapPhase = 0;
+    this.flapHold = 0;
     var self = this;
     this.joints.forEach(function (joint) {
       joint.body.fixed = false;
@@ -302,6 +334,17 @@
     this.updateGeometry(dt);
 
     if (!this.alive) return;
+
+    // A shocked creature is stunned: its behaviour stays interrupted and its
+    // motion decays quickly so it stops whatever it was doing.
+    if (this.shockTimer > 0) {
+      this.shockTimer = Math.max(0, this.shockTimer - dt);
+      var damping = Math.exp(-Creature.SHOCK_DAMPING * dt);
+      for (var s = 0; s < this.joints.length; s++) {
+        this.joints[s].body.vx *= damping;
+        this.joints[s].body.vy *= damping;
+      }
+    }
 
     // Track the maximum jumping height (used by the stats)
     var lowest = this.getLowestPoint();
@@ -616,8 +659,100 @@
    * Brain interface
    * ------------------------------------------------------------------ */
   Creature.prototype.updateBrain = function (dt) {
-    if (this.brain && this.alive && !this.recordingPlayer) {
+    if (!this.alive || this.recordingPlayer) return;
+
+    // A shocked creature drops everything: no brain signals, no reflexes —
+    // its muscles simply relax until the stun wears off.
+    if (this.shockTimer > 0) {
+      this.relaxMuscles();
+      return;
+    }
+
+    if (this.brain) {
       this.brain.update(dt);
+    }
+    // The wing reflex runs after the network so a winged creature always
+    // knows to flap while it is off the ground, regardless of its brain.
+    if (this.autoFlap) {
+      this.applyAutoFlap(dt);
+    }
+  };
+
+  /**
+   * Startles the creature, interrupting whatever it is currently doing.
+   * While the stun lasts the brain and the wing reflex are suspended, all
+   * muscles relax and the creature's motion decays (see `update`).
+   * Returns true when the creature was actually shocked.
+   */
+  Creature.prototype.shock = function (duration) {
+    if (!this.alive || this.recordingPlayer) return false;
+    var stun = duration === undefined ? Creature.SHOCK_DURATION : duration;
+    if (!(stun > 0)) return false;
+    this.shockTimer = Math.max(this.shockTimer || 0, stun);
+    this.flapPhase = 0;
+    this.flapHold = 0;
+    this.relaxMuscles();
+    return true;
+  };
+
+  /** Lets every muscle go limp (used while a creature is shocked). */
+  Creature.prototype.relaxMuscles = function () {
+    for (var i = 0; i < this.muscles.length; i++) {
+      this.muscles[i].currentForce = 0;
+    }
+  };
+
+  /* ------------------------------------------------------------------ *
+   * Automatic wing-flap reflex
+   * ------------------------------------------------------------------ */
+  /**
+   * A creature "knows" it should flap when it has no ground contact or is
+   * falling — those are exactly the moments a wing stroke can help.
+   */
+  Creature.prototype.shouldFlapWings = function () {
+    var joints = this.joints;
+    if (!joints.length) return false;
+    var touchingGround = 0;
+    var velocityY = 0;
+    for (var i = 0; i < joints.length; i++) {
+      if (joints[i].isCollidingWithGround) touchingGround++;
+      velocityY += joints[i].body.vy;
+    }
+    if (touchingGround === 0) return true;
+    return velocityY / joints.length < Creature.AUTO_FLAP_FALL_SPEED;
+  };
+
+  /**
+   * Drives the wing-connected muscles with a rhythmic oscillator whenever
+   * the creature is airborne or falling. The downstroke comes first so the
+   * reflex produces lift as early as possible after leaving the ground.
+   * On the ground the brain keeps full control of the wing muscles.
+   */
+  Creature.prototype.applyAutoFlap = function (dt) {
+    if (!this.wingMuscles || !this.wingMuscles.length) return;
+
+    if (this.shouldFlapWings()) {
+      this.flapHold = Creature.AUTO_FLAP_HOLD;
+    } else if (this.flapHold > 0) {
+      this.flapHold -= dt;
+    } else {
+      // Resting: leave the wing muscles to the brain and restart the next
+      // flap burst with a clean downstroke.
+      this.flapPhase = 0;
+      return;
+    }
+
+    this.flapPhase += 2 * Math.PI * Creature.AUTO_FLAP_FREQUENCY * dt;
+    // Negative first: a contraction drives the wing tip downward (powered
+    // downstroke), an expansion recovers for the next stroke.
+    var drive = -Math.sin(this.flapPhase);
+    for (var i = 0; i < this.wingMuscles.length; i++) {
+      var muscle = this.wingMuscles[i];
+      if (!muscle.living) continue;
+      muscle.muscleAction =
+        drive < 0 ? MuscleAction.CONTRACT : MuscleAction.EXPAND;
+      muscle.currentForce =
+        Math.max(0.05, Math.abs(drive)) * muscle.data.strength;
     }
   };
 

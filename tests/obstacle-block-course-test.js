@@ -29,7 +29,7 @@ assert.strictEqual(
 
 var world = new EVO.PhysicsWorld();
 var scene = new EVO.Scene(world, description);
-assert.strictEqual(scene.blocks.length, 5, 'the course starts with a visible stretch of blocks');
+assert.strictEqual(scene.blocks.length, 15, 'the course starts with a visible stretch of fifteen blocks');
 assert.strictEqual(scene.obstacles.length, 0, 'no rolling obstacle is created');
 for (var i = 1; i < scene.blocks.length; i++) {
   assert(scene.blocks[i].height > scene.blocks[i - 1].height, 'block height grows along the course');
