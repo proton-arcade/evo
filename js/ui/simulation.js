@@ -45,6 +45,7 @@
       this.playback = null;
       this.playbackTime = 0;
       this.playbackPlaying = true;
+      this.playbackHeld = false;
       this.playbackDuration = 0;
       this.waitTimer = 0;
       this.ghost = null;
@@ -123,7 +124,13 @@
     },
 
     saveStateToSettings: function () {
-      Settings.SimulationSettings = EVO.SimulationSettings.encode(this.settings);
+      /* Persist the settings queued for the next generation (the HUD slider
+       * and the settings drawer both edit that object). */
+      var simSettings =
+        this.evolution && this.evolution.SettingsForNextGeneration
+          ? this.evolution.SettingsForNextGeneration
+          : this.settings;
+      Settings.SimulationSettings = EVO.SimulationSettings.encode(simSettings);
       Settings.NetworkSettings = EVO.NeuralNetworkSettings.encode(this.networkSettings);
       if (this.data) {
         Settings.LastCreatureDesign = JSON.stringify(EVO.CreatureDesign.encode(this.data.CreatureDesign));
@@ -177,6 +184,19 @@
       phase.appendChild(this.timeLabel);
       topLeft.appendChild(phase);
 
+      /* Pause / resume control — visible while the generation simulates.
+       * (The playback bar has its own play button for replays.) */
+      var pauseRow = UI.el('div', 'hud-row');
+      pauseRow.appendChild(UI.el('span', 'hud-row-label', 'PAUSE'));
+      this.pauseButton = UI.el('button', 'hud-button hud-pause-button', '\u2016');
+      this.pauseButton.title = 'Pause the simulation (space bar)';
+      this.pauseButton.setAttribute('aria-label', 'Pause the simulation (space bar)');
+      this.pauseButton.addEventListener('click', function () {
+        self.pauseSimulation();
+      });
+      pauseRow.appendChild(this.pauseButton);
+      topLeft.appendChild(pauseRow);
+
       var creatureRow = UI.el('div', 'hud-row');
       creatureRow.appendChild(UI.el('span', 'hud-row-label', 'CREATURE'));
       this.previousCreatureButton = UI.el('button', 'hud-button', '\u2039');
@@ -218,12 +238,15 @@
       this.durationSlider.value = String(this.settings.SimulationTime);
       this.durationValue = UI.el('span', 'hud-row-value', this.settings.SimulationTime + 'S');
       this.durationSlider.addEventListener('input', function () {
-        self.settings.SimulationTime = parseFloat(self.durationSlider.value);
-        self.evolution.SettingsForNextGeneration.SimulationTime = self.settings.SimulationTime;
-        self.settings = self.evolution.Settings; // keep the reference in sync
-        self.durationValue.textContent = self.settings.SimulationTime + 'S';
-        self.timeLabel.textContent =
-          self.formatTime(self.batchElapsed()) + ' / ' + self.settings.SimulationTime + 's';
+        var value = parseFloat(self.durationSlider.value);
+        if (self.evolution && self.evolution.SettingsForNextGeneration) {
+          // Queued for the next generation; the running one keeps its duration.
+          self.evolution.SettingsForNextGeneration.SimulationTime = value;
+        } else {
+          self.settings.SimulationTime = value;
+        }
+        self.durationValue.textContent = value + 'S';
+        self.timeLabel.textContent = self.formatTime(self.batchElapsed()) + ' / ' + self.currentSimulationTime() + 's';
         self.saveStateToSettings();
       });
       durationRow.appendChild(this.durationSlider);
@@ -319,6 +342,8 @@
       this.seekSlider.addEventListener('input', function () {
         if (!self.playback) return;
         self.playbackPlaying = false;
+        // Scrubbing holds the replay so autoplay does not skip ahead.
+        self.playbackHeld = true;
         self.playbackTime = parseFloat(self.seekSlider.value) * self.playbackDuration;
         self.playback.seek(self.playbackTime);
         self.refreshHud();
@@ -458,6 +483,9 @@
 
     onGenerationBegin: function (generation) {
       this.currentGeneration = generation;
+      // The evolution copies its settings at every generation boundary —
+      // follow the new object so the HUD reads the running generation's values.
+      if (this.evolution) this.settings = this.evolution.Settings;
       if (this.awaitingPlayback) {
         // The playback of the previous generation is still running.
         this.awaitingPlayback = false;
@@ -492,6 +520,7 @@
         this.playbackDuration = Math.max(0.1, this.playback.getDuration());
         this.playbackTime = 0;
         this.playbackPlaying = true;
+        this.playbackHeld = false;
         this.waitTimer = 1.2;
         this.playback.seek(0);
       } else {
@@ -525,11 +554,14 @@
       }
       if (this.playbackPlaying) {
         this.playbackPlaying = false;
+        // A manual pause holds the replay instead of letting autoplay skip on.
+        this.playbackHeld = true;
       } else {
         if (this.playbackTime >= this.playbackDuration - 0.001) {
           this.playbackTime = 0;
         }
         this.playbackPlaying = true;
+        this.playbackHeld = false;
       }
       this.refreshHud();
     },
@@ -537,6 +569,7 @@
     continueToNextGeneration: function () {
       this.waitTimer = 0;
       this.playbackPlaying = false;
+      this.playbackHeld = false;
       this.state = 'simulating';
       this.evolution.resume();
       this.refreshHud();
@@ -572,6 +605,20 @@
 
     batchElapsed: function () {
       return this.evolution ? this.evolution.batchElapsed : 0;
+    },
+
+    /** The duration of the generation that is currently running. */
+    currentSimulationTime: function () {
+      return this.evolution && this.evolution.Settings
+        ? this.evolution.Settings.SimulationTime
+        : this.settings.SimulationTime;
+    },
+
+    /** The duration queued for the next generation (what the slider shows). */
+    queuedSimulationTime: function () {
+      return this.evolution && this.evolution.SettingsForNextGeneration
+        ? this.evolution.SettingsForNextGeneration.SimulationTime
+        : this.settings.SimulationTime;
     },
 
     /* ================================================================ *
@@ -612,7 +659,7 @@
             this.waitTimer = this.autoplay ? 1.0 : 0;
           }
           this.playback.seek(this.playbackTime);
-        } else if (this.autoplay) {
+        } else if (this.autoplay && !this.playbackHeld) {
           this.continueToNextGeneration();
         }
       }
@@ -790,6 +837,20 @@
         this.phaseLabel.textContent = 'SIMULATING';
       }
 
+      /* Pause button glyph: ‖ while running, ▶ while paused. During a
+       * playback it controls the replay, mirroring the playback bar. */
+      if (this.pauseButton) {
+        var pausePlaying =
+          this.state === 'playback'
+            ? !!this.playback && !!this.playbackPlaying
+            : !paused;
+        var pauseTarget = this.state === 'playback' ? 'the playback' : 'the simulation';
+        this.pauseButton.textContent = pausePlaying ? '\u2016' : '\u25B6';
+        this.pauseButton.title =
+          (pausePlaying ? 'Pause ' : 'Resume ') + pauseTarget + ' (space bar)';
+        this.pauseButton.setAttribute('aria-label', this.pauseButton.title);
+      }
+
       var inPlayback = this.state === 'playback' && !!this.playback;
       this.playbackBar.classList.toggle('hidden', !inPlayback);
       if (inPlayback) {
@@ -811,12 +872,12 @@
 
       this.autoplayToggle.textContent = this.autoplay ? 'ON' : 'OFF';
       this.autoplayToggle.classList.toggle('active', this.autoplay);
-      this.durationSlider.value = String(this.settings.SimulationTime);
-      this.durationValue.textContent = this.settings.SimulationTime + 'S';
+      this.durationSlider.value = String(this.queuedSimulationTime());
+      this.durationValue.textContent = this.queuedSimulationTime() + 'S';
       this.timeLabel.textContent =
         this.formatTime(this.state === 'playback' ? this.playbackTime : this.batchElapsed()) +
         ' / ' +
-        (this.state === 'playback' ? this.playbackDuration : this.settings.SimulationTime).toFixed(1) +
+        (this.state === 'playback' ? this.playbackDuration : this.currentSimulationTime()).toFixed(1) +
         's';
     },
 
@@ -829,8 +890,7 @@
           this.seekSlider.value = String(Utils.clamp(this.playbackTime / this.playbackDuration, 0, 1));
         }
       } else {
-        this.timeLabel.textContent =
-          this.formatTime(this.batchElapsed()) + ' / ' + this.settings.SimulationTime + 's';
+        this.timeLabel.textContent = this.formatTime(this.batchElapsed()) + ' / ' + this.currentSimulationTime() + 's';
         var fitness = this.currentFitness();
         this.fitnessLabel.textContent = 'FITNESS: ' + percent(fitness);
       }

@@ -841,6 +841,13 @@ input[type='range']::-moz-range-thumb {
   color: #f7f7f7;
 }
 
+.hud-pause-button {
+  width: 34px;
+  padding-left: 0;
+  padding-right: 0;
+  text-align: center;
+}
+
 .hud-top-right {
   right: 16px;
   top: 14px;

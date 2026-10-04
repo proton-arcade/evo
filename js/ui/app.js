@@ -933,7 +933,7 @@
             'Drag with the left mouse button to pan, use the scroll wheel or a pinch gesture to zoom. ' +
             'On touch screens, drag with one finger to pan and use two fingers to pan and zoom. In the editor, ' +
             'drag from one joint to another to create a bone and from one bone to another to create a muscle. ' +
-            'The space bar pauses the simulation.',
+            'The PAUSE control in the simulation HUD or the space bar pauses and resumes the simulation.',
         },
         {
           title: 'Gallery',

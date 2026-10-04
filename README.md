@@ -63,16 +63,16 @@ lifts, so beginning a two-finger gesture will not accidentally place a component
   original: distance to the ground, four distance sensors, a rotating sensor, velocity, angular
   velocity, ground contacts and rotation. One output per unique muscle id, plus one output that
   rotates the distance sensor.
-* **HUD**: generation, live fitness, phase, autoplay, duration, creature selector, generation history,
+* **HUD**: generation, live fitness, phase, pause control, autoplay, duration, creature selector, generation history,
   best-of-generation thumbnail, playback controls, speed, visibility and camera controls.
 * **Playback**: after each generation the recording of the best creature is played back. You can scrub
   through it, save it to the gallery, or continue to the next generation.
 * **Ghost**: while a generation is running, the best creature of the previous generation is drawn as a
   faded "ghost".
 
-Keyboard: `Space` pause/continue, `V` toggle visibility, `R` reset the camera, arrow keys switch the
-watched creature (or scrub the playback). Mouse: drag to pan, wheel/pinch to zoom. On touch screens,
-drag with one finger to pan and use two fingers to pan and zoom.
+Pause and resume with the **PAUSE** control in the HUD or the `Space` key, `V` toggles visibility, `R` resets the
+camera and the arrow keys switch the watched creature (or scrub the playback). Mouse: drag to pan,
+wheel/pinch to zoom. On touch screens, drag with one finger to pan and use two fingers to pan and zoom.
 
 ---
 
