@@ -994,7 +994,8 @@
             'best creatures are selected and their genomes are recombined and mutated to form the next generation. ' +
             'The fitness function depends on the task: running rewards horizontal distance, jumping the maximum ' +
             'height, climbing the vertical distance, flying the time spent above the ground and the height, ' +
-            'and the obstacle jump rewards jumping over the rolling obstacles without touching them.',
+            'and the obstacle jump rewards getting past the solid blocks of the obstacle course (the blocks ' +
+            'grow the further the creature gets, and the HUD shows how many of them were cleared).',
         },
         {
           title: 'Brain inputs',
@@ -1018,6 +1019,15 @@
           body:
             'Whenever a generation is evaluated, a recording of the best creature is kept. You can play back the ' +
             'best creatures of all previous generations and save your favourites to the gallery.',
+        },
+        {
+          title: 'Visibility',
+          body:
+            'The Visibility button (or the V key) switches between two views. When it is on, the whole ' +
+            'population is shown as a faded crowd and the best creature of the previous generation is drawn ' +
+            'fully opaque on top of everyone else, so that the creatures no longer merge into one mess. ' +
+            'When it is off, only the creature you are watching (the arrow keys switch between them) is ' +
+            'shown at full opacity.',
         },
       ];
 

@@ -337,18 +337,114 @@
     return (heightFitness + liftOffFitness) / 2.0;
   };
 
+  /**
+   * The obstacle course: a creature is rewarded for getting past the blocks.
+   *
+   * Every block is worth the same share of the fitness (1 / numberOfBlocks) and
+   * the course is split into one segment per block, so that there is a smooth
+   * reward gradient even before the first block is cleared:
+   *
+   *   fitness = (blocks cleared + progress towards the next block) / numberOfBlocks
+   *
+   * Clearing the last block completes the course and gives the maximum fitness.
+   * Scenes without blocks (rolling-obstacle scenes of legacy save files) keep
+   * the original collision-avoidance fitness.
+   */
   function ObstacleJumpObjectiveTracker(creature) {
     this.creature = creature;
     this.collisionDurations = new Map();
     this.collidedJoints = new Set();
     this.maxHeightJumped = 0;
+    /** Absolute x position of the furthest point the creature reached. */
+    this.furthestPositionX = -Infinity;
+    this.maxForwardDistance = 0;
+    this.blocksPassed = 0;
+    /** Progress inside the segment towards the next block (0 … 1). */
+    this.segmentProgress = 0;
+    var blocks = ObstacleJumpObjectiveTracker.blocksOf(creature);
+    /** Whether the scene is an obstacle course at all. */
+    this.hasBlockCourse = blocks.length > 0;
+    this.numberOfBlocks = blocks.length;
+    this.courseDistance = ObstacleJumpObjectiveTracker.courseDistanceFor(creature, blocks);
   }
   ObstacleJumpObjectiveTracker.MAX_HEIGHT = 20;
   ObstacleJumpObjectiveTracker.MAX_COLLISION_DURATION_PER_JOINT = 0.4;
+  /** How far beyond a block the creature has to be for it to count as cleared. */
+  ObstacleJumpObjectiveTracker.BLOCK_PASS_MARGIN = 0.1;
+
+  ObstacleJumpObjectiveTracker.blocksOf = function (creature) {
+    var scene = creature.scene;
+    if (!scene || !scene.getObstacleBlocks) return [];
+    return scene.getObstacleBlocks() || [];
+  };
+
+  ObstacleJumpObjectiveTracker.courseDistanceFor = function (creature, blocks) {
+    if (!blocks.length) return 0;
+    var last = blocks[blocks.length - 1];
+    var startX = creature.initialPosition ? creature.initialPosition.x : creature.getXPosition();
+    return Math.max(1e-3, last.right - startX);
+  };
+
+  /** Updates the furthest position, the cleared blocks and the segment progress. */
+  ObstacleJumpObjectiveTracker.prototype.updateCourseProgress = function (blocks) {
+    var creature = this.creature;
+    var x = creature.getXPosition();
+    if (x > this.furthestPositionX) this.furthestPositionX = x;
+    var startX = creature.initialPosition ? creature.initialPosition.x : 0;
+    this.maxForwardDistance = Math.max(0, this.furthestPositionX - startX);
+    this.hasBlockCourse = blocks.length > 0;
+
+    // Blocks that already lie behind the spawn position are ignored, so that a
+    // design which was not drawn around the origin does not start with free
+    // block credit.
+    var relevant = [];
+    for (var i = 0; i < blocks.length; i++) {
+      if (blocks[i].right > startX + ObstacleJumpObjectiveTracker.BLOCK_PASS_MARGIN) {
+        relevant.push(blocks[i]);
+      }
+    }
+    this.numberOfBlocks = relevant.length;
+    if (!relevant.length) {
+      this.blocksPassed = 0;
+      this.segmentProgress = 0;
+      return;
+    }
+
+    var passed = 0;
+    for (var b = 0; b < relevant.length; b++) {
+      if (
+        this.furthestPositionX >
+        relevant[b].right + ObstacleJumpObjectiveTracker.BLOCK_PASS_MARGIN
+      ) {
+        passed++;
+      }
+    }
+    this.blocksPassed = passed;
+
+    if (passed >= relevant.length) {
+      // The whole course has been cleared.
+      this.segmentProgress = 1;
+      return;
+    }
+    var segmentStart = passed === 0 ? startX : relevant[passed - 1].right;
+    var segmentEnd = relevant[passed].right + ObstacleJumpObjectiveTracker.BLOCK_PASS_MARGIN;
+    var length = segmentEnd - segmentStart;
+    this.segmentProgress =
+      length <= 1e-6 ? 1 : Utils.clamp((this.furthestPositionX - segmentStart) / length, 0, 1);
+  };
 
   ObstacleJumpObjectiveTracker.prototype.fixedUpdate = function (dt) {
     var creature = this.creature;
     this.maxHeightJumped = Math.max(creature.distanceFromGround(), this.maxHeightJumped);
+
+    var blocks = ObstacleJumpObjectiveTracker.blocksOf(creature);
+    if (blocks.length) {
+      this.courseDistance = ObstacleJumpObjectiveTracker.courseDistanceFor(creature, blocks);
+      this.updateCourseProgress(blocks);
+      return;
+    }
+
+    // Legacy rolling-obstacle scenes: track how long joints stay in contact.
     creature.addObstacleCollidingJointsToSet(this.collidedJoints);
     var self = this;
     this.collidedJoints.forEach(function (joint) {
@@ -359,7 +455,21 @@
     this.collidedJoints.clear();
   };
 
+  /** The live block progress of the creature (used by the HUD). */
+  ObstacleJumpObjectiveTracker.prototype.getBlockProgress = function () {
+    return { passed: this.blocksPassed, total: this.numberOfBlocks };
+  };
+
   ObstacleJumpObjectiveTracker.prototype.evaluateFitness = function () {
+    if (this.hasBlockCourse) {
+      if (!this.numberOfBlocks) return 0;
+      return Utils.clamp(
+        (this.blocksPassed + this.segmentProgress) / this.numberOfBlocks,
+        0,
+        1
+      );
+    }
+
     var heightFitness = Utils.clamp(
       this.maxHeightJumped / ObstacleJumpObjectiveTracker.MAX_HEIGHT,
       0,

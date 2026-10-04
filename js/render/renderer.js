@@ -189,6 +189,12 @@
       var w = entry.halfWidth * 2 * scale;
       var h = entry.halfHeight * 2 * scale;
       ctx.fillRect(-w / 2, -h / 2, w, h);
+      if (entry.accent) {
+        // A lighter strip along the top edge, so that the solid blocks of the
+        // obstacle course read clearly against the ground and the background.
+        ctx.fillStyle = entry.accent;
+        ctx.fillRect(-w / 2, -h / 2, w, Math.max(2, Math.min(h * 0.14, 0.18 * scale)));
+      }
       ctx.restore();
     },
 

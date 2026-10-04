@@ -752,9 +752,13 @@
     return { x: max.x, y: max.y };
   };
 
-  /** The currently active obstacle of the scene (used by the legacy brain). */
+  /**
+   * The currently active obstacle of the scene (used by the legacy brain):
+   * the next block of the obstacle course that is still ahead of the creature
+   * or the first rolling obstacle of a legacy scene.
+   */
   Creature.prototype.getObstacle = function () {
-    return this.scene ? this.scene.getObstacle() : null;
+    return this.scene ? this.scene.getObstacle(this.getXPosition()) : null;
   };
 
   Creature.prototype.getDistanceFromObstacle = function (obstacle) {

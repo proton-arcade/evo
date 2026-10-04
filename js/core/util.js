@@ -567,6 +567,20 @@
     setVisible: function (node, visible) {
       node.style.display = visible ? '' : 'none';
     },
+    /**
+     * Finds the direct child of `row` whose class name contains `marker`.
+     * Used to keep a handle on buttons that were created by Widgets.buttonRow.
+     */
+    findButton: function (row, marker) {
+      if (!row || !row.children) return null;
+      for (var i = 0; i < row.children.length; i++) {
+        var child = row.children[i];
+        if (child && typeof child.className === 'string' && child.className.indexOf(marker) >= 0) {
+          return child;
+        }
+      }
+      return null;
+    },
   };
 
   EVO.Utils = MathUtils;

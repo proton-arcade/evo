@@ -9,8 +9,11 @@
  * Every task has its own scene:
  *
  *   Running / Jumping / Flying  — a flat ground plane.
- *   Obstacle Jump               — two walls and rolling obstacles that are
- *                                 launched towards the creature.
+ *   Obstacle Jump               — a course of solid blocks that grow in size
+ *                                 the further the creature gets.  A creature is
+ *                                 rewarded for every block it clears.  (Legacy
+ *                                 save files may still contain the original
+ *                                 rolling obstacles, which stay supported.)
  *   Climbing                    — an infinite staircase at a 45° angle.
  */
 (function (global) {
@@ -25,6 +28,8 @@
     Stairstep: 'evolution::structure::stairstep',
     StepSpawner: 'evolution::structure::stepspawner',
     RollingObstacleSpawner: 'evolution::structure::rollingobstaclespawner',
+    /** A solid block of the obstacle course (see obstacleJumpScene). */
+    ObstacleBlock: 'evolution::structure::obstacleblock',
     DistanceMarkerSpawner: 'evolution::structure::distancemarkerspawner',
   };
 
@@ -33,6 +38,7 @@
     wall: '#565656',
     steps: '#4F4F4F',
     obstacle: '#151515',
+    obstacleAccent: '#4a4a4a',
     marker: '#9e9e9e',
     backgroundColor: '#ededed',
   };
@@ -174,6 +180,39 @@
     { x: 1, y: 0, pivot: 0.11 },
   ];
 
+  /** The top surface of the ground plane of the default scenes. */
+  var GROUND_SURFACE_Y = -4.8 + 9.56 / 2;
+
+  /**
+   * The blocks of the obstacle course (Obstacle Jump).
+   *
+   * The blocks stand on the ground, one behind the other, and slowly grow in
+   * both width and height: every block is a little bigger and a little further
+   * away than the one before it.  A creature has to get past a block (climb
+   * over it, jump over it or squeeze around it) before the next one becomes
+   * relevant, and it is rewarded for every block it clears.
+   */
+  var OBSTACLE_BLOCKS = [
+    { distance: 9, width: 3.0, height: 1.0 },
+    { distance: 17, width: 3.6, height: 1.8 },
+    { distance: 26, width: 4.2, height: 2.6 },
+    { distance: 36, width: 4.8, height: 3.4 },
+    { distance: 47, width: 5.4, height: 4.2 },
+  ];
+
+  function obstacleBlockStructures() {
+    return OBSTACLE_BLOCKS.map(function (block) {
+      return structure(
+        StructureType.ObstacleBlock,
+        block.distance,
+        GROUND_SURFACE_Y + block.height / 2,
+        block.width,
+        block.height,
+        0
+      );
+    });
+  }
+
   function flatGroundScene() {
     var ground = structure(StructureType.Ground, 0.476771, -4.8, 1000, 9.56, 0);
     var markers = structure(StructureType.DistanceMarkerSpawner, -0.45, 1.63, 0, 0, 0, {
@@ -205,22 +244,14 @@
 
     obstacleJumpScene: function () {
       var ground = structure(StructureType.Ground, 0.476771, -4.8, 1000, 9.56, 0);
-      var rightWall = structure(StructureType.Wall, 40, -4.8, 100, 35.78, 90);
-      var leftWall = structure(StructureType.Wall, -41.73, -4.8, 100, 35.78, 90);
-      var obstacleSpawner = structure(
-        StructureType.RollingObstacleSpawner,
-        31.1,
-        4.41,
-        1,
-        1,
-        180,
-        { spawnInterval: 5, obstacleLifetime: 5, forceMultiplier: 1 }
-      );
-      return SimulationSceneDescription.create(
-        [ground, leftWall, rightWall, obstacleSpawner],
-        0.5,
-        FLAT_GROUND_CONTROL_POINTS
-      );
+      // Flat side walls that keep the creature inside the arena.  They are
+      // upright boxes (not rotated), so they render as ordinary walls.
+      var arenaHeight = 60;
+      var arenaY = GROUND_SURFACE_Y + arenaHeight / 2;
+      var leftWall = structure(StructureType.Wall, -30, arenaY, 4, arenaHeight, 0);
+      var rightWall = structure(StructureType.Wall, 70, arenaY, 4, arenaHeight, 0);
+      var structures = [ground, leftWall, rightWall].concat(obstacleBlockStructures());
+      return SimulationSceneDescription.create(structures, 0.5, FLAT_GROUND_CONTROL_POINTS);
     },
 
     climbingScene: function () {
@@ -273,6 +304,8 @@
     this.obstacles = [];
     this.obstacleSpawners = [];
     this.spawnTimers = [];
+    /** The static blocks of the obstacle course (Obstacle Jump). */
+    this.obstacleBlocks = [];
     this.time = 0;
     this.build();
   }
@@ -299,6 +332,9 @@
         case StructureType.RollingObstacleSpawner:
           self.buildObstacleSpawner(entry);
           break;
+        case StructureType.ObstacleBlock:
+          self.addObstacleBlock(entry);
+          break;
         case StructureType.DistanceMarkerSpawner:
           self.buildDistanceMarkers(entry);
           break;
@@ -307,7 +343,8 @@
     this.world.rebuildGrid();
   };
 
-  Scene.prototype.addBox = function (entry, color, tag) {
+  Scene.prototype.addBox = function (entry, color, tag, options) {
+    options = options || {};
     var t = entry.transform;
     var halfWidth = Math.abs(t.scaleX) / 2;
     var halfHeight = Math.abs(t.scaleY) / 2;
@@ -323,6 +360,7 @@
         halfHeight: halfHeight,
         angle: angle,
         color: color,
+        accent: options.accent || null,
       });
     } else {
       // A huge ground plane: render it as a large quad around the camera.
@@ -371,6 +409,57 @@
   Scene.prototype.buildObstacleSpawner = function (entry) {
     this.obstacleSpawners.push(entry);
     this.spawnTimers.push(0);
+  };
+
+  /**
+   * Adds a static block of the obstacle course.  Blocks are solid geometry
+   * (the creature has to get past them) and they are tracked so that the
+   * objective tracker can reward a creature for every block it clears.
+   */
+  Scene.prototype.addObstacleBlock = function (entry) {
+    var box = this.addBox(entry, COLORS.obstacle, 'Obstacle', {
+      accent: COLORS.obstacleAccent,
+    });
+    var t = entry.transform;
+    var halfWidth = Math.abs(t.scaleX) / 2;
+    var halfHeight = Math.abs(t.scaleY) / 2;
+    var block = {
+      index: this.obstacleBlocks.length,
+      box: box,
+      x: t.x,
+      y: t.y,
+      width: halfWidth * 2,
+      height: halfHeight * 2,
+      halfWidth: halfWidth,
+      halfHeight: halfHeight,
+      left: t.x - halfWidth,
+      right: t.x + halfWidth,
+      top: t.y + halfHeight,
+    };
+    this.obstacleBlocks.push(block);
+    return block;
+  };
+
+  /** The blocks of the obstacle course (empty for all other scenes). */
+  Scene.prototype.getObstacleBlocks = function () {
+    return this.obstacleBlocks;
+  };
+
+  /** The blocks a creature standing at `x` has already cleared. */
+  Scene.prototype.getNumberOfBlocksPassed = function (x) {
+    var passed = 0;
+    for (var i = 0; i < this.obstacleBlocks.length; i++) {
+      if (x > this.obstacleBlocks[i].right) passed++;
+    }
+    return passed;
+  };
+
+  /** The horizontal length of the whole block course. */
+  Scene.prototype.getObstacleCourseLength = function () {
+    if (!this.obstacleBlocks.length) return 0;
+    var first = this.obstacleBlocks[0];
+    var last = this.obstacleBlocks[this.obstacleBlocks.length - 1];
+    return Math.max(0, last.right - first.left);
   };
 
   Scene.prototype.buildDistanceMarkers = function (entry) {
@@ -616,8 +705,25 @@
     return true;
   };
 
-  /** The scene keeps track of only one obstacle at a time for the legacy brain. */
-  Scene.prototype.getObstacle = function () {
+  /**
+   * The obstacle the legacy obstacle-jump brain measures its distance to: the
+   * next block that is still ahead of the creature (or the last one when the
+   * whole course has been cleared).  Rolling obstacles of legacy scenes are
+   * still reported as before.
+   */
+  Scene.prototype.getObstacle = function (x) {
+    if (this.obstacleBlocks.length) {
+      var blocks = this.obstacleBlocks;
+      if (x !== undefined && x !== null) {
+        for (var i = 0; i < blocks.length; i++) {
+          if (blocks[i].right >= x) {
+            return { x: blocks[i].left, y: blocks[i].y, block: blocks[i] };
+          }
+        }
+      }
+      var last = blocks[blocks.length - 1];
+      return { x: last.left, y: last.y, block: last };
+    }
     return this.obstacles.length ? this.obstacles[0] : null;
   };
 

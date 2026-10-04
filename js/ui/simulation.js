@@ -105,6 +105,8 @@
         'generationLabel',
         'taskLabel',
         'fitnessLabel',
+        'blocksRow',
+        'blocksLabel',
         'phaseLabel',
         'timeLabel',
         'previousCreatureButton',
@@ -127,6 +129,7 @@
         'saveRecordingButton',
         'nextButton',
         'speedLabel',
+        'visibilityButton',
         'settingsDrawer',
         'simulationSettingsPanel',
         'settingsButton',
@@ -239,6 +242,13 @@
       this.fitnessLabel = UI.el('div', 'hud-fitness', 'FITNESS: 0.00%');
       topLeft.appendChild(this.fitnessLabel);
 
+      // Progress along the obstacle course (only shown for Obstacle Jump).
+      this.blocksRow = UI.el('div', 'hud-row hidden');
+      this.blocksRow.appendChild(UI.el('span', 'hud-row-label', 'BLOCKS'));
+      this.blocksLabel = UI.el('span', 'hud-row-value', '0/0');
+      this.blocksRow.appendChild(this.blocksLabel);
+      topLeft.appendChild(this.blocksRow);
+
       var phase = UI.el('div', 'hud-phase');
       this.phaseLabel = UI.el('span', 'hud-phase-label', 'SIMULATING');
       phase.appendChild(this.phaseLabel);
@@ -331,50 +341,52 @@
       frame.appendChild(this.thumbnailCaption);
       topRight.appendChild(frame);
 
-      topRight.appendChild(
-        Widgets.buttonRow(
-          [
-            {
-              label: 'Visibility',
-              onClick: function () {
-                self.showAllCreatures = !self.showAllCreatures;
-                self.refreshHud();
-              },
-              className: 'small',
+      var controlsRow = Widgets.buttonRow(
+        [
+          {
+            label: 'Visibility',
+            onClick: function () {
+              self.showAllCreatures = !self.showAllCreatures;
+              self.refreshHud();
             },
-            {
-              label: 'Camera',
-              onClick: function () {
-                self.resetCamera();
-              },
-              className: 'small',
+            className: 'small visibility-button',
+          },
+          {
+            label: 'Camera',
+            onClick: function () {
+              self.resetCamera();
             },
-            {
-              label: 'Settings',
-              onClick: function (event) {
-                self.settingsButton = event && event.currentTarget;
-                self.setSettingsVisible(!self.settingsVisible);
-              },
-              className: 'small',
+            className: 'small',
+          },
+          {
+            label: 'Settings',
+            onClick: function (event) {
+              self.settingsButton = event && event.currentTarget;
+              self.setSettingsVisible(!self.settingsVisible);
             },
-            {
-              label: 'Save run',
-              onClick: function () {
-                self.showSaveMenu();
-              },
-              className: 'small',
+            className: 'small',
+          },
+          {
+            label: 'Save run',
+            onClick: function () {
+              self.showSaveMenu();
             },
-            {
-              label: 'Load',
-              onClick: function () {
-                self.showLoadMenu();
-              },
-              className: 'small',
+            className: 'small',
+          },
+          {
+            label: 'Load',
+            onClick: function () {
+              self.showLoadMenu();
             },
-          ],
-          'compact'
-        )
+            className: 'small',
+          },
+        ],
+        'compact'
       );
+      // Keep a handle on the toggle so that its state can be shown.
+      this.visibilityButton =
+        controlsRow && UI.findButton ? UI.findButton(controlsRow, 'visibility-button') : null;
+      topRight.appendChild(controlsRow);
       element.appendChild(topRight);
 
       /* --- Bottom left: statistics --- */
@@ -819,14 +831,17 @@
         Renderer.drawDistanceMarkers(ctx, scene, this.camera);
       }
 
-      // Ghost of the previous generation's best creature
-      if (this.state === 'simulating' && this.ghost && this.ghost.getDuration() > 0) {
-        this.ghost.seek(this.ghostTime % Math.max(0.001, this.ghost.getDuration()));
-        Renderer.drawPlaybackCreature(ctx, this.ghost, this.camera, {
-          opacity: Settings.HiddenCreatureOpacity,
-          showMuscles: Settings.ShowMuscles,
-          showContraction: Settings.ShowMuscleContraction,
-        });
+      // The best creature of the previous generation (the "ghost") plays in a
+      // loop while the current generation is simulated.
+      var ghostAvailable =
+        this.state === 'simulating' && this.ghost && this.ghost.getDuration() > 0;
+      // Visibility mode: instead of drawing the whole population fully opaque
+      // (which merges into one unreadable mess) the creatures are faded out and
+      // the best of the previous generation is highlighted above all of them.
+      var highlightPreviousBest = this.showAllCreatures && ghostAvailable;
+
+      if (ghostAvailable && !highlightPreviousBest) {
+        this.drawGhost(ctx, this.ghost, Settings.HiddenCreatureOpacity);
       }
 
       // Creatures
@@ -840,12 +855,20 @@
         var batch = this.evolution.currentCreatureBatch;
         for (var i = 0; i < batch.length; i++) {
           var watched = i === this.watchingIndex;
-          var opacity = this.showAllCreatures || watched ? 1 : Settings.HiddenCreatureOpacity;
+          var opacity = highlightPreviousBest
+            ? Settings.HiddenCreatureOpacity
+            : watched
+              ? 1
+              : Settings.HiddenCreatureOpacity;
           Renderer.drawCreature(ctx, batch[i], this.camera, {
             opacity: opacity,
             showMuscles: Settings.ShowMuscles,
             showContraction: Settings.ShowMuscleContraction,
           });
+        }
+        if (highlightPreviousBest) {
+          // Drawn last so that it sits on top of every other creature.
+          this.drawGhost(ctx, this.ghost, 1);
         }
       }
 
@@ -853,6 +876,21 @@
       if (this.frameCount % 4 === 0) {
         this.drawThumbnail();
       }
+    },
+
+    /**
+     * Draws the looped recording of the previous generation's best creature.
+     * `opacity` of 1 highlights it above the population (visibility mode).
+     */
+    drawGhost: function (ctx, ghost, opacity) {
+      if (!ghost || ghost.getDuration() <= 0) return false;
+      ghost.seek(this.ghostTime % Math.max(0.001, ghost.getDuration()));
+      Renderer.drawPlaybackCreature(ctx, ghost, this.camera, {
+        opacity: opacity === undefined ? Settings.HiddenCreatureOpacity : opacity,
+        showMuscles: Settings.ShowMuscles,
+        showContraction: Settings.ShowMuscleContraction,
+      });
+      return true;
     },
 
     playbackCenter: function () {
@@ -931,16 +969,13 @@
           ? this.playbackGeneration
           : this.currentGeneration || (this.evolution ? this.evolution.currentGenerationNumber : 1);
       this.generationLabel.textContent = 'GENERATION ' + generation;
-      var activeObjective =
-        this.state === 'playback'
-          ? this.playbackObjective
-          : this.evolution && this.evolution.Settings
-            ? this.evolution.Settings.Objective
-            : this.settings.Objective;
+      var activeObjective = this.activeObjective();
       this.taskLabel.textContent = objectiveName(activeObjective);
 
       var fitness = this.currentFitness();
       this.fitnessLabel.textContent = 'FITNESS: ' + percent(fitness);
+      this.refreshBlockProgress(activeObjective);
+      this.refreshVisibilityButton();
 
       var paused = this.evolution ? this.evolution.paused : false;
       if (this.state === 'playback') {
@@ -1000,6 +1035,55 @@
       }
     },
 
+    /**
+     * The block progress that is shown in the HUD: the watched creature's
+     * progress while simulating, or the position of the recorded creature
+     * during the playback of a generation.
+     */
+    blockProgress: function (activeObjective) {
+      if (!EVO.Objective || activeObjective !== EVO.Objective.ObstacleJump) return null;
+      if (this.state === 'playback') {
+        var blocks = this.playbackScene ? this.playbackScene.obstacleBlocks : null;
+        if (!blocks || !blocks.length) return null;
+        var x = this.playback ? this.playbackCenter().x : null;
+        return {
+          passed: x === null ? 0 : this.playbackScene.getNumberOfBlocksPassed(x),
+          total: blocks.length,
+        };
+      }
+      var creature =
+        this.evolution && this.evolution.getWatchingCreature
+          ? this.evolution.getWatchingCreature(this.watchingIndex)
+          : null;
+      var tracker = creature ? creature.objectiveTracker : null;
+      if (!tracker || !tracker.getBlockProgress) return null;
+      var progress = tracker.getBlockProgress();
+      if (!progress.total) return null;
+      return progress;
+    },
+
+    refreshBlockProgress: function (activeObjective) {
+      if (!this.blocksRow) return;
+      var progress = this.blockProgress(activeObjective);
+      this.blocksRow.classList.toggle('hidden', !progress);
+      if (progress) {
+        this.blocksLabel.textContent = progress.passed + '/' + progress.total;
+      }
+    },
+
+    /**
+     * Shows whether the visibility mode (whole population + the previous
+     * generation's best creature above everyone) is active.
+     */
+    refreshVisibilityButton: function () {
+      var button = this.visibilityButton;
+      if (!button) return;
+      button.classList.toggle('primary', !!this.showAllCreatures);
+      button.title = this.showAllCreatures
+        ? 'Showing the whole population, with the best creature of the previous generation on top'
+        : 'Showing the watched creature only';
+    },
+
     refreshTimeLabels: function () {
       if (!this.timeLabel) return;
       if (this.state === 'playback' && this.playback) {
@@ -1008,6 +1092,8 @@
         if (this.playbackDuration > 0) {
           this.seekSlider.value = String(Utils.clamp(this.playbackTime / this.playbackDuration, 0, 1));
         }
+        // The recorded creature moves along the course during the replay.
+        this.refreshBlockProgress(this.playbackObjective);
       } else if (this.state === 'playback') {
         this.timeLabel.textContent = 'NO RECORDING';
       } else {
@@ -1017,7 +1103,15 @@
         this.timeLabel.textContent = this.formatTime(this.batchElapsed()) + ' / ' + activeDuration + 's';
         var fitness = this.currentFitness();
         this.fitnessLabel.textContent = 'FITNESS: ' + percent(fitness);
+        this.refreshBlockProgress(this.activeObjective());
       }
+    },
+
+    /** The objective of whatever is on screen right now. */
+    activeObjective: function () {
+      if (this.state === 'playback') return this.playbackObjective;
+      if (this.evolution && this.evolution.Settings) return this.evolution.Settings.Objective;
+      return this.settings ? this.settings.Objective : null;
     },
 
     formatTime: function (time) {

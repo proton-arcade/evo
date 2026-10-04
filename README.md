@@ -56,7 +56,12 @@ lifts, so beginning a two-finger gesture will not accidentally place a component
 ## The simulation
 
 * **Tasks**: Running, Jumping, Obstacle Jump, Climbing, Flying. Each task has its own scene
-  (flat ground, walls with rolling obstacles, or an endless staircase) and its own fitness function.
+  (flat ground, an obstacle course of solid blocks, or an endless staircase) and its own fitness
+  function.
+* **Obstacle Jump**: the creature faces a course of solid blocks that slowly grow in size the further
+  it gets. A creature is rewarded for every block it clears (and for the progress it makes towards
+  the next one); the HUD shows the current `BLOCKS` progress. Simulations saved with older versions
+  keep their original rolling obstacles.
 * **Evolution**: every generation evaluates a population of neural networks, sorts them by fitness
   and breeds the next generation by selection, recombination and mutation. The best creatures can be
   kept unchanged (*keep best creatures*).
@@ -74,7 +79,9 @@ lifts, so beginning a two-finger gesture will not accidentally place a component
   library entries keep their saved brain; other designs receive a fresh exploratory brain. Residents
   share ground and obstacle physics, with Pause/Resume, run length and speed controls.
 * **Ghost**: while a generation is running, the best creature of the previous generation is drawn as a
-  faded "ghost".
+  faded "ghost". With *Visibility* enabled the whole population is faded out and that previous best
+  creature is shown fully opaque on top of everyone else, so the population stays readable instead of
+  merging into one mess. Turning *Visibility* off shows the watched creature alone.
 
 Keyboard: `Space` pause/continue (or use the on-screen Pause/Resume button), `V` toggle visibility,
 `R` reset the camera, arrow keys switch the watched creature (or scrub the playback). Mouse: drag to
@@ -131,7 +138,7 @@ js/core/algorithms.js       selection, recombination, mutation, objectives and f
 js/core/data.js             creature designs, stats, recordings, save data and encoding/decoding
 js/data/defaultCreatures.js the five sample creatures
 js/sim/physics.js           the 2D rigid body engine (bodies, joints, boxes, circles, raycasts, contacts)
-js/sim/scene.js             the simulation scenes (ground, walls, staircase, obstacle spawner, camera)
+js/sim/scene.js             the simulation scenes (ground, walls, staircase, obstacle blocks, legacy rolling-obstacle spawner, camera)
 js/sim/creature.js          the creature (joints, bones, muscles, wings, contacts, statistics)
 js/sim/brain.js             the brains and the objective trackers
 js/sim/builder.js           the model behind the editor (placing/deleting components, undo history)
@@ -174,7 +181,10 @@ for test in tests/*.js; do node "$test"; done
 ```
 
 The suite includes scratch-built editor-to-simulation scenarios, evolved-creature saving, ecosystem
-selection and shared physics, floor friction, simulation playback, and mobile/touch layout checks.
+selection and shared physics, floor friction, simulation playback, mobile/touch layout checks, the
+Obstacle Jump block course (solid blocks, block-progress rewards, the legacy rolling-obstacle fitness
+and an end-to-end evolution run) and the simulation visibility layering (faded population with the
+previous generation's best creature drawn above it).
 
 ---
 
