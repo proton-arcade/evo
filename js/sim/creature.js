@@ -880,7 +880,7 @@
 
   /** The currently active obstacle of the scene (used by the legacy brain). */
   Creature.prototype.getObstacle = function () {
-    return this.scene ? this.scene.getObstacle() : null;
+    return this.scene ? this.scene.getObstacle(this) : null;
   };
 
   Creature.prototype.getDistanceFromObstacle = function (obstacle) {

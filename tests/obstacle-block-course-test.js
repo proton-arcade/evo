@@ -29,12 +29,46 @@ assert.strictEqual(
 
 var world = new EVO.PhysicsWorld();
 var scene = new EVO.Scene(world, description);
-assert.strictEqual(scene.blocks.length, 5, 'the course has several blocks');
+assert.strictEqual(scene.blocks.length, 5, 'the course starts with a visible stretch of blocks');
 assert.strictEqual(scene.obstacles.length, 0, 'no rolling obstacle is created');
 for (var i = 1; i < scene.blocks.length; i++) {
   assert(scene.blocks[i].height > scene.blocks[i - 1].height, 'block height grows along the course');
   assert(scene.blocks[i].width > scene.blocks[i - 1].width, 'block width grows along the course');
 }
+var initialCourseLength = scene.blocks.length;
+var initialLastBlock = scene.blocks[initialCourseLength - 1];
+var addedBlocks = scene.extendObstacleBlocksAhead(initialLastBlock.right);
+assert(addedBlocks > 0, 'the course adds blocks once a creature approaches its visible end');
+assert(scene.blocks.length > initialCourseLength, 'the obstacle course is not capped at its initial block count');
+assert(
+  scene.blocks[scene.blocks.length - 1].x > initialLastBlock.x,
+  'new obstacles are generated beyond the previously final block'
+);
+assert(
+  scene.blocks[scene.blocks.length - 1].height >= initialLastBlock.height,
+  'the generated course retains progressive obstacle difficulty'
+);
+var extendedLength = scene.blocks.length;
+scene.extendObstacleBlocksAhead(scene.blocks[scene.blocks.length - 1].right + 20);
+assert(scene.blocks.length > extendedLength, 'the generator can continue extending without a fixed finish');
+var beforeSceneUpdate = scene.blocks.length;
+world.addBody({
+  x: scene.blocks[scene.blocks.length - 1].right + 30,
+  y: 2,
+  radius: 0.5,
+});
+scene.update(0);
+assert(
+  scene.blocks.length > beforeSceneUpdate,
+  'scene updates also extend the course for shared-world ecosystem simulations'
+);
+assert.strictEqual(
+  description.structures.some(function (entry) {
+    return entry.type === EVO.StructureType.Wall;
+  }),
+  false,
+  'the default obstacle scene has no forward wall that ends the course'
+);
 assert(
   world.staticBoxes.some(function (box) { return box.tag === 'Obstacle'; }),
   'blocks participate in creature collision physics as obstacles'

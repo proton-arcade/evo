@@ -893,6 +893,21 @@
       // evolution engine prepares the next scene while the recording plays.
       var scene =
         this.state === 'playback' && this.playbackScene ? this.playbackScene : this.evolution.scene;
+      // Recreate the same open-ended obstacle course while a recording is
+      // playing, otherwise a champion that clears the initial stretch appears
+      // to run through empty space in its recap.
+      if (
+        scene &&
+        this.state === 'playback' &&
+        this.playback &&
+        scene.extendObstacleBlocksAhead
+      ) {
+        var playbackLeadingX = -Infinity;
+        (this.playback.joints || []).forEach(function (joint) {
+          playbackLeadingX = Math.max(playbackLeadingX, joint.x);
+        });
+        scene.extendObstacleBlocksAhead(playbackLeadingX);
+      }
       if (scene) {
         Renderer.drawScene(ctx, scene, this.camera);
         Renderer.drawDistanceMarkers(ctx, scene, this.camera);

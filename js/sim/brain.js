@@ -143,9 +143,9 @@
   ObstacleJumpingBrain.prototype = Object.create(JumpingBrain.prototype);
   ObstacleJumpingBrain.prototype.updateInputs = function () {
     JumpingBrain.prototype.updateInputs.call(this);
-    if (!this.obstacle) {
-      this.obstacle = this.creature.getObstacle();
-    }
+    // An obstacle course can keep extending, so refresh the target after a
+    // block is cleared instead of holding on to the first block forever.
+    this.obstacle = this.creature.getObstacle();
     this.network.inputs[6] = this.creature.getDistanceFromObstacle(this.obstacle);
   };
 
@@ -425,12 +425,13 @@
       this.maxForwardX = Math.max(this.maxForwardX, this.getLeadingEdgeX());
       var trailingEdgeX = this.getTrailingEdgeX();
       for (var i = 0; i < this.blocks.length; i++) {
-        if (this.passedBlockIndices[i]) continue;
         var block = this.blocks[i];
+        var blockIndex = block.index === undefined ? i : block.index;
+        if (this.passedBlockIndices[blockIndex]) continue;
         var rightEdge = block.right === undefined ? block.x + block.width / 2 : block.right;
         // Count a block only after the whole creature has cleared its far edge.
         if (trailingEdgeX > rightEdge + 0.05) {
-          this.passedBlockIndices[i] = true;
+          this.passedBlockIndices[blockIndex] = true;
           this.passedBlockCount++;
         }
       }
@@ -468,17 +469,19 @@
       );
 
     if (this.blocks.length) {
-      var passedFitness = this.passedBlockCount / this.blocks.length;
-      var lastBlock = this.blocks[this.blocks.length - 1];
-      var courseEndX = lastBlock.right === undefined
-        ? lastBlock.x + lastBlock.width / 2
-        : lastBlock.right;
-      var courseLength = Math.max(1, courseEndX - this.initialX);
-      var progressFitness = Utils.clamp((this.maxForwardX - this.initialX) / courseLength, 0, 1);
-      // Clearing the course is the primary goal. Forward progress and avoiding
-      // prolonged contact provide smaller gradients while a creature learns.
+      // There is deliberately no final block. A saturating score keeps the
+      // evolutionary selection range bounded while every additional clear and
+      // every bit of forward travel continues to improve the reward.
+      var spacing = this.blocks.length > 1
+        ? Math.max(1, this.blocks[1].x - this.blocks[0].x)
+        : 6;
+      var passedFitness = 1 - Math.exp(-this.passedBlockCount / 3);
+      var forwardDistance = Math.max(0, this.maxForwardX - this.initialX);
+      var progressFitness = 1 - Math.exp(-forwardDistance / (spacing * 4));
+      // Clearing a block is the main signal; progress and avoiding prolonged
+      // contact still help a creature discover the next jump.
       return Utils.clamp(
-        0.82 * passedFitness + 0.13 * progressFitness + 0.05 * collisionFitness,
+        0.8 * passedFitness + 0.15 * progressFitness + 0.05 * collisionFitness,
         0,
         1
       );

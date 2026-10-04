@@ -1090,7 +1090,7 @@
             'best creatures are selected and their genomes are recombined and mutated to form the next generation. ' +
             'The fitness function depends on the task: running rewards horizontal distance, jumping the maximum ' +
             'height, climbing the vertical distance, flying sustained time above the ground and average height, ' +
-            'and the obstacle jump rewards clearing a course of progressively larger blocks.',
+            'and the obstacle jump rewards clearing an endless course of progressively larger blocks.',
         },
         {
           title: 'Brain inputs',

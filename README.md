@@ -4,18 +4,22 @@ A complete, dependency-free web port of the sandbox game **Evolution** by Keiwan
 ([keiwando.com/evolution](https://keiwando.com/evolution/)) — a simulator that demonstrates machine
 learning with evolutionary algorithms, inspired by Karl Sims' *Evolving Virtual Creatures*.
 
-The whole game is written in plain **HTML, CSS and JavaScript** and runs directly from the file
-system: **open `index.html` in a browser** (double click it). There is no build step, no server, no
-package manager and no network access required.
+The whole game is written in plain **HTML, CSS and JavaScript**. Desktop browsers can open the project
+folder directly with no build step or package manager. For a phone or tablet, serve the folder from any
+static web host or local web server and open its `http://` or `https://` address; iOS does not reliably
+run a multi-file interactive app from a local `file://` document.
 
 ---
 
 ## Getting started
 
-1. Download or copy this folder.
-2. Open `index.html` with Chrome, Firefox, Edge, Safari or any other modern browser.
-3. (Optional) If your browser restricts local storage for `file://` pages, everything still works —
-   only the in-browser save slots are disabled and you are asked to save as files instead.
+1. Download or copy the entire folder — `index.html`, `css/`, and `js/` must stay together.
+2. On desktop, open `index.html` with Chrome, Firefox, Edge, Safari or another modern browser.
+3. On iPhone or iPad, use a hosted `https://` address (or a local-network web server) rather than
+   opening a `file://` copy from Safari or Files. Apple's document preview does not reliably load the
+   sibling scripts that make the simulator interactive.
+4. (Optional) If your browser restricts local storage for a local page, everything still works — only
+   the in-browser save slots are disabled and you are asked to save as files instead.
 
 ### First steps
 
@@ -58,7 +62,8 @@ lifts, so beginning a two-finger gesture will not accidentally place a component
 ## The simulation
 
 * **Tasks**: Running, Jumping, Obstacle Jump, Climbing, Flying. Each task has its own scene
-  (flat ground, a course of progressively larger blocks, or an endless staircase) and its own fitness function.
+  (flat ground, an endless course that generates progressively larger blocks ahead of the creature,
+  or an endless staircase) and its own fitness function.
 * **Evolution**: every generation evaluates a population of neural networks, sorts them by fitness
   and breeds the next generation by selection, recombination and mutation. The best creatures can be
   kept unchanged (*keep best creatures*).
@@ -92,8 +97,10 @@ and zoom.
 ## Mobile and touch screens
 
 Evolution uses Pointer Events for touch input and works in current browsers with Pointer Events
-support (including iOS/iPadOS 13+ and Android Chrome 55+). No app installation or network connection
-is needed; the same `index.html` can be opened locally.
+support (including iOS/iPadOS 13+ and Android Chrome 55+). iOS's local-file and Files preview modes
+are not reliable for interactive multi-file pages: host the folder or use a local-network server, then
+open the resulting `http://` or `https://` address in Safari. The app now keeps a visible startup
+message in local previews instead of leaving a blank screen.
 
 * **Editor:** one-finger taps use the selected tool; drag a joint/bone to move it or empty space to
   pan. Two fingers pan and zoom. Touch edits are committed on lift to avoid accidental placements
