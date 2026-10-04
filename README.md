@@ -47,8 +47,9 @@ run a multi-file interactive app from a local `file://` document.
 
 Properties (weight, fitness penalty, bone weight, wing/inverted flags, wing chord, muscle strength,
 muscle id, decoration scale/rotation/flip/order) are edited in the right-hand panel. Marked wings are
-highlighted in teal. Muscles that share a
-**muscle id** are contracted and expanded together by a single network output.
+highlighted in teal. Connect a wing to another bone with a muscle: its contraction and expansion power
+the wing stroke, while an unconnected wing cannot flap. Muscles that share a **muscle id** are
+contracted and expanded together by a single network output.
 
 Keyboard: `V` select, `J` joint, `B` bone, `W` wing, `M` muscle, `D` decoration, `E` erase,
 `Ctrl/Cmd+Z` undo, `Ctrl/Cmd+Shift+Z` redo, `Delete` removes the selection, `Esc` cancels a pending placement.

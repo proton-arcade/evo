@@ -1195,17 +1195,27 @@
       var lines = ['WING FLIGHT DIAGNOSTICS'];
       var totalUpwardLift = 0;
       var totalUpwardWingForce = 0;
+      var unpoweredWingCount = 0;
       wings.forEach(function (bone, index) {
         var debug = bone.wingDebug || {};
         var angle = (debug.angleOfAttack || 0) * Utils.Rad2Deg;
+        var hasWingMuscle = !!(bone.connectedMuscles && bone.connectedMuscles.length);
+        if (!hasWingMuscle) unpoweredWingCount++;
         totalUpwardLift += Math.max(0, debug.liftY || 0);
         totalUpwardWingForce += debug.forceY || 0;
         lines.push(
           'Wing ' + (index + 1) + ': ' + (debug.speed || 0).toFixed(2) + ' u/s · AoA ' +
             angle.toFixed(0) + '° · lift ' + (debug.lift || 0).toFixed(0) + ' · drag ' +
-            (debug.drag || 0).toFixed(0)
+            (debug.drag || 0).toFixed(0) + ' · drive ' + Math.abs(debug.strokeForce || 0).toFixed(0)
         );
       });
+      if (unpoweredWingCount) {
+        lines.push(
+          unpoweredWingCount === wings.length
+            ? 'Add a muscle between a wing and a body bone to power a flap.'
+            : unpoweredWingCount + ' wing(s) have no attached muscle and cannot flap.'
+        );
+      }
 
       var mass = 0;
       (creature.joints || []).forEach(function (joint) {

@@ -95,6 +95,29 @@ apply(narrowWing);
 apply(wideWing);
 assert(wideWing.wingDebug.lift > narrowWing.wingDebug.lift, 'larger chord increases effective wing area and lift');
 
+// A wing-connected muscle must be able to rotate a wing. Applying equal and
+// opposite endpoint forces supplies torque without injecting any free lift.
+var drivenWing = makeWing({ x: 1, y: 0 }, 0, false, 2);
+drivenWing.strokeTangentSign = -1;
+drivenWing.connectedMuscles = [{
+  living: true,
+  currentForce: 1500,
+  muscleAction: EVO.Creature.MuscleAction.CONTRACT,
+}];
+EVO.Creature.prototype.applyWingStrokeTorque.call({}, drivenWing);
+assert(drivenWing.endJoint.body.fy < 0, 'a contracted right wing receives a downward tip stroke');
+assert(drivenWing.startJoint.body.fy > 0, 'the root receives the opposing internal force');
+assert.strictEqual(
+  drivenWing.startJoint.body.fy + drivenWing.endJoint.body.fy,
+  0,
+  'the muscle drive adds torque rather than an artificial net force'
+);
+drivenWing.startJoint.body.fx = drivenWing.startJoint.body.fy = 0;
+drivenWing.endJoint.body.fx = drivenWing.endJoint.body.fy = 0;
+drivenWing.connectedMuscles[0].currentForce = 0;
+EVO.Creature.prototype.applyWingStrokeTorque.call({}, drivenWing);
+assert.strictEqual(drivenWing.startJoint.body.fy + drivenWing.endJoint.body.fy, 0, 'an idle wing has no motor stroke');
+
 var extreme = makeWing({ x: 1, y: 0 }, -1000, false, 5);
 var extremeForce = apply(extreme);
 assert(

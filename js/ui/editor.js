@@ -1163,6 +1163,13 @@
           );
           if (bone.isWing) {
             panel.add(
+              UI.el(
+                'p',
+                'panel-note',
+                'Connect this wing to another bone with a muscle. Its contraction and expansion power the flap.'
+              )
+            );
+            panel.add(
               Widgets.slider({
                 label: 'Wing chord',
                 min: 0.25,
@@ -1385,7 +1392,7 @@
           hint = 'Tap one joint and then another to connect them with a bone.';
           break;
         case Tools.WING:
-          hint = 'Tap a bone to add a wing. Tap a winged bone again to remove its wing.';
+          hint = 'Tap a bone to add a wing. Tap it again to remove the wing; connect it to a muscle to flap.';
           break;
         case Tools.MUSCLE:
           hint = 'Tap one bone and then another to connect them with a muscle.';
