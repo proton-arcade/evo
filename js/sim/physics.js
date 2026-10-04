@@ -141,7 +141,9 @@
    * PhysicsWorld
    * ------------------------------------------------------------------ */
   function PhysicsWorld() {
-    this.gravity = -9.81;
+    // The original game configures the physics scenes with a gravity of
+    // -50 m/s² (see ScenePhysicsConfiguration.cs).  Scenes can override this.
+    this.gravity = -50;
     this.bodies = [];
     this.constraints = [];
     this.staticBoxes = [];
@@ -285,6 +287,50 @@
       result.push(this.hugeCircles[hc]);
     }
     return result;
+  };
+
+  /**
+   * Returns how deeply a circle at (x, y) with the given radius penetrates the
+   * static geometry (0 when it does not overlap anything).  Used to place
+   * creatures without spawning them inside the ground.
+   */
+  PhysicsWorld.prototype.staticPenetration = function (x, y, radius) {
+    var candidates = this.queryStatic(x, y, radius);
+    var deepest = 0;
+    for (var i = 0; i < candidates.length; i++) {
+      var candidate = candidates[i];
+      if (candidate instanceof StaticBox) {
+        var local = candidate.toLocal(x, y);
+        var dx = Math.abs(local.x) - candidate.hx;
+        var dy = Math.abs(local.y) - candidate.hy;
+        if (dx <= 0 && dy <= 0) {
+          // The centre is inside the box — the way out is the nearest side.
+          var overlapX = -dx;
+          var overlapY = -dy;
+          var depth = Math.min(overlapX, overlapY) + radius;
+          if (depth > deepest) deepest = depth;
+        } else if (dx < 0 || dy < 0) {
+          // Only one axis overlaps: the circle is beside the box.
+          var distance = Math.sqrt(Math.max(dx, 0) * Math.max(dx, 0) + Math.max(dy, 0) * Math.max(dy, 0));
+          var depth2 = radius - distance;
+          if (depth2 > deepest) deepest = depth2;
+        } else {
+          var outsideDistance = Math.sqrt(dx * dx + dy * dy);
+          var depth3 = radius - outsideDistance;
+          if (depth3 > deepest) deepest = depth3;
+        }
+      } else {
+        var cdx = x - candidate.x;
+        var cdy = y - candidate.y;
+        var minDistance = candidate.radius + radius;
+        var distanceSq = cdx * cdx + cdy * cdy;
+        if (distanceSq < minDistance * minDistance) {
+          var depth4 = minDistance - Math.sqrt(distanceSq);
+          if (depth4 > deepest) deepest = depth4;
+        }
+      }
+    }
+    return deepest;
   };
 
   PhysicsWorld.prototype.addForceCallback = function (callback) {

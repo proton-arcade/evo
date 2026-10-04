@@ -358,6 +358,8 @@
    * their own orientation, based on their velocity in their local frame.
    */
   Creature.prototype.applyWingForce = function (bone) {
+    if (!bone.isWing) return;
+
     var centerVelocityX = (bone.startJoint.body.vx + bone.endJoint.body.vx) / 2;
     var centerVelocityY = (bone.startJoint.body.vy + bone.endJoint.body.vy) / 2;
 
@@ -377,7 +379,7 @@
     var dot = localVelocityX * 0 + localVelocityY * 1;
     var localAngle = Math.atan2(cross, dot) * Utils.Rad2Deg;
 
-    if (bone.data.inverted !== localAngle < 0) {
+    if (bone.data.inverted !== (localAngle < 0)) {
       // We make it easier to move the wing up by not generating any opposing force.
       return;
     }
@@ -625,6 +627,26 @@
       minDistance = Math.min(minDistance, position.y - stairHeight);
     }
     return minDistance;
+  };
+
+  /**
+   * Moves the creature upwards until none of its joints overlaps the static
+   * geometry.  Used when placing a creature so that it can never spawn inside
+   * the ground (which would make the physics explode).
+   */
+  Creature.prototype.resolveStaticOverlap = function (maxIterations) {
+    maxIterations = maxIterations || 40;
+    if (!this.scene || !this.scene.world) return;
+    for (var iteration = 0; iteration < maxIterations; iteration++) {
+      var push = 0;
+      for (var i = 0; i < this.joints.length; i++) {
+        var body = this.joints[i].body;
+        var penetration = this.scene.world.staticPenetration(body.x, body.y, body.radius);
+        if (penetration > push) push = penetration;
+      }
+      if (push <= 0.001) return;
+      this.translate(0, push + 0.01);
+    }
   };
 
   Creature.prototype.getVelocity = function () {

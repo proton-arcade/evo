@@ -212,10 +212,12 @@
     for (var i = 0; i < batch.length; i++) {
       var creature = batch[i];
       var distance = creature.semiSafeDistanceFromGround(sceneContainsStairs);
-      if (!isFinite(distance) || distance <= 0) distance = dropHeight;
-      creature.translate(0, dropHeight - distance + (distance < dropHeight ? 0 : 0));
+      if (!isFinite(distance)) distance = 0;
+      creature.translate(0, dropHeight - distance);
       // Horizontal offset so that the creatures do not overlap visually.
       creature.translate(i * 0.15 - (batch.length - 1) * 0.075, 0);
+      // Never spawn inside the geometry (large designs or steep scenes).
+      creature.resolveStaticOverlap();
       creature.initialPosition = {
         x: creature.getXPosition(),
         y: creature.getYPosition(),
@@ -332,6 +334,11 @@
         stats: creature.getStatistics(simulationTime),
         numberOfNetworkOutputs: creature.brain ? creature.brain.network.numberOfOutputs() : 0,
         recorder: creature.recorder,
+        // Snapshot the recording immediately: the recorders are reused (and
+        // therefore reset) for the next batch of the same generation.
+        recordingMovementData: creature.recorder
+          ? creature.recorder.toRecordingMovementData()
+          : null,
         creatureIndex: i,
       };
       this.solutions[this.solutionIndex++] = solution;
@@ -382,8 +389,8 @@
 
     // Create a recording of the best creature of this generation.
     var recording = null;
-    if (best.recorder) {
-      var movementData = best.recorder.toRecordingMovementData();
+    var movementData = best.recordingMovementData || (best.recorder ? best.recorder.toRecordingMovementData() : null);
+    if (movementData) {
       recording = EVO.CreatureRecording.create(
         EVO.CreatureDesign.clone(this.data.CreatureDesign),
         this.data.SceneDescription,

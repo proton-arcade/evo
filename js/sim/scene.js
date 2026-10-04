@@ -55,12 +55,63 @@
     return result;
   }
 
+  /* ------------------------------------------------------------------ *
+   * ScenePhysicsConfiguration (ScenePhysicsConfiguration.cs)
+   * ------------------------------------------------------------------ */
+  var ScenePhysicsConfiguration = {
+    create: function (values) {
+      values = values || {};
+      return {
+        Gravity: values.Gravity === undefined ? -50 : values.Gravity,
+        BounceThreshold: values.BounceThreshold === undefined ? 2 : values.BounceThreshold,
+        SleepThreshold: values.SleepThreshold === undefined ? 0.005 : values.SleepThreshold,
+        DefaultContactOffset: values.DefaultContactOffset === undefined ? 0.01 : values.DefaultContactOffset,
+        DefaultSolverIterations: values.DefaultSolverIterations === undefined ? 7 : values.DefaultSolverIterations,
+        DefaultSolverVelocityIterations:
+          values.DefaultSolverVelocityIterations === undefined ? 10 : values.DefaultSolverVelocityIterations,
+        QueriesHitBackfaces: !!values.QueriesHitBackfaces,
+        QueriesHitTriggers: values.QueriesHitTriggers === undefined ? true : !!values.QueriesHitTriggers,
+        AutoSyncTransforms: !!values.AutoSyncTransforms,
+      };
+    },
+
+    encode: function (config) {
+      return {
+        gravity: config.Gravity,
+        bounceThreshold: config.BounceThreshold,
+        sleepThreshold: config.SleepThreshold,
+        defaultContactOffset: config.DefaultContactOffset,
+        defaultSolverIterations: config.DefaultSolverIterations,
+        defaultSolverVelocityIterations: config.DefaultSolverVelocityIterations,
+        queriesHitBackfaces: config.QueriesHitBackfaces,
+        queriesHitTriggers: config.QueriesHitTriggers,
+        autoSyncTransforms: config.AutoSyncTransforms,
+      };
+    },
+
+    decode: function (json) {
+      if (!json) return ScenePhysicsConfiguration.create();
+      return ScenePhysicsConfiguration.create({
+        Gravity: json.gravity,
+        BounceThreshold: json.bounceThreshold,
+        SleepThreshold: json.sleepThreshold,
+        DefaultContactOffset: json.defaultContactOffset,
+        DefaultSolverIterations: json.defaultSolverIterations,
+        DefaultSolverVelocityIterations: json.defaultSolverVelocityIterations,
+        QueriesHitBackfaces: json.queriesHitBackfaces,
+        QueriesHitTriggers: json.queriesHitTriggers,
+        AutoSyncTransforms: json.autoSyncTransforms,
+      });
+    },
+  };
+
   var SimulationSceneDescription = {
-    create: function (structures, dropHeight, cameraControlPoints) {
+    create: function (structures, dropHeight, cameraControlPoints, physicsConfiguration) {
       return {
         Version: 1,
         structures: structures,
         DropHeight: dropHeight,
+        PhysicsConfiguration: physicsConfiguration || ScenePhysicsConfiguration.create(),
         CameraControlPoints: cameraControlPoints,
       };
     },
@@ -69,6 +120,9 @@
       return {
         version: description.Version,
         dropHeight: description.DropHeight,
+        physicsConfiguration: ScenePhysicsConfiguration.encode(
+          description.PhysicsConfiguration || ScenePhysicsConfiguration.create()
+        ),
         cameraControlPoints: description.CameraControlPoints.map(function (point) {
           return { x: point.x, y: point.y, pivot: point.pivot };
         }),
@@ -106,7 +160,8 @@
         json.dropHeight,
         (json.cameraControlPoints || []).map(function (point) {
           return { x: point.x, y: point.y, pivot: point.pivot };
-        })
+        }),
+        ScenePhysicsConfiguration.decode(json.physicsConfiguration)
       );
     },
   };
@@ -208,6 +263,10 @@
   function Scene(world, description) {
     this.world = world;
     this.description = description;
+    var physicsConfiguration =
+      (description && description.PhysicsConfiguration) || ScenePhysicsConfiguration.create();
+    world.gravity = physicsConfiguration.Gravity;
+    world.solverIterations = physicsConfiguration.DefaultSolverIterations;
     this.structures = [];
     this.renderables = [];
     this.distanceMarkers = [];
@@ -677,6 +736,7 @@
 
   EVO.StructureType = StructureType;
   EVO.SceneColors = COLORS;
+  EVO.ScenePhysicsConfiguration = ScenePhysicsConfiguration;
   EVO.SimulationSceneDescription = SimulationSceneDescription;
   EVO.DefaultSimulationScenes = DefaultSimulationScenes;
   EVO.Scene = Scene;

@@ -66,6 +66,9 @@
       this.frameDesign();
       this.render();
       this.attachEvents();
+      // Keep the application's current design in sync so that "Simulate"
+      // works even if the creature was not modified.
+      App.setDesign(this.builder.design);
     },
 
     hide: function () {
