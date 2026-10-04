@@ -30,6 +30,8 @@
       this.playbackPlaying = true;
       this.speed = 1;
       this.playback = null;
+      this.manualCamera = false;
+      this.gestures = null;
 
       this.buildLayout();
       this.resize();
@@ -148,13 +150,13 @@
       if (!this.canvas) return;
       var width = this.canvasContainer.clientWidth || 600;
       var height = this.canvasContainer.clientHeight || 400;
-      var ratio = global.devicePixelRatio || 1;
+      var ratio = Utils.displayPixelRatio ? Utils.displayPixelRatio() : Math.min(global.devicePixelRatio || 1, 2);
       this.canvas.width = Math.floor(width * ratio);
       this.canvas.height = Math.floor(height * ratio);
       this.canvas.style.width = width + 'px';
       this.canvas.style.height = height + 'px';
       this.pixelRatio = ratio;
-      this.camera = new EVO.Camera({ orthographicSize: 12.24 });
+      if (!this.camera) this.camera = new EVO.Camera({ orthographicSize: 12.24 });
       this.camera.resize(width, height);
     },
 
@@ -204,6 +206,7 @@
 
     selectRecording: function (id) {
       this.selectedId = id;
+      this.manualCamera = false;
       this.playbackTime = 0;
       this.playbackPlaying = true;
       var recording = this.currentRecording();
@@ -269,7 +272,7 @@
         return;
       }
 
-      if (this.bounds) {
+      if (this.bounds && !this.manualCamera) {
         this.camera.x = (this.bounds.minX + this.bounds.maxX) / 2;
         this.camera.y = (this.bounds.minY + this.bounds.maxY) / 2;
         var width = Math.max(6, this.bounds.maxX - this.bounds.minX);
@@ -325,6 +328,18 @@
 
     attachEvents: function () {
       var self = this;
+      this.gestures = Utils.addTouchGestures(this.canvas, {
+        onPinch: function (scale, cx, cy) {
+          if (!self.camera) return;
+          self.manualCamera = true;
+          self.camera.zoomAt(cx, cy, 1 / scale);
+        },
+        onPan: function (dx, dy) {
+          if (!self.camera) return;
+          self.manualCamera = true;
+          self.camera.panByScreenDelta(dx, dy);
+        },
+      });
       this.onResize = function () {
         self.resize();
       };
@@ -340,6 +355,10 @@
     },
 
     detachEvents: function () {
+      if (this.gestures) {
+        this.gestures.detach();
+        this.gestures = null;
+      }
       global.removeEventListener('resize', this.onResize);
       global.removeEventListener('keydown', this.onKeyDown);
     },

@@ -51,6 +51,9 @@
       this.ghostTime = 0;
       this.recording = null;
       this.awaitingPlayback = false;
+      this.dragging = null;
+      this.activePointerId = null;
+      this.gestures = null;
       this.frameCount = 0;
       this.settingsVisible = false;
       this.autoSaveGeneration = 0;
@@ -79,14 +82,19 @@
       if (!this.canvas) return;
       var width = this.canvasContainer.clientWidth || 800;
       var height = this.canvasContainer.clientHeight || 600;
-      var ratio = global.devicePixelRatio || 1;
+      var ratio = Utils.displayPixelRatio ? Utils.displayPixelRatio() : Math.min(global.devicePixelRatio || 1, 2);
       this.canvas.width = Math.floor(width * ratio);
       this.canvas.height = Math.floor(height * ratio);
       this.canvas.style.width = width + 'px';
       this.canvas.style.height = height + 'px';
       this.camera.resize(width, height);
       this.pixelRatio = ratio;
-      var thumbSize = 150;
+      var viewport = global.visualViewport;
+      var viewportWidth = viewport ? viewport.width : global.innerWidth;
+      var viewportHeight = viewport ? viewport.height : global.innerHeight;
+      var narrowScreen = viewportWidth && viewportWidth <= 760;
+      var shortLandscape = viewportWidth >= 761 && viewportHeight && viewportHeight <= 460;
+      var thumbSize = narrowScreen || shortLandscape ? 96 : 150;
       this.thumbnailCanvas.width = Math.floor(thumbSize * ratio);
       this.thumbnailCanvas.height = Math.floor(thumbSize * ratio);
       this.thumbnailCanvas.style.width = thumbSize + 'px';
@@ -225,6 +233,14 @@
 
       /* --- Top right: thumbnail + buttons --- */
       var topRight = UI.el('div', 'hud hud-top-right');
+      var exitButton = UI.el('button', 'evo-button small', 'Exit');
+      exitButton.title = 'Exit the simulation and return to the home screen';
+      exitButton.setAttribute('aria-label', 'Exit simulation');
+      exitButton.addEventListener('click', function () {
+        self.exitSimulation();
+      });
+      topRight.appendChild(exitButton);
+
       var frame = UI.el('div', 'thumbnail-frame');
       this.thumbnailCanvas = UI.el('canvas', 'thumbnail-canvas');
       frame.appendChild(this.thumbnailCanvas);
@@ -252,9 +268,9 @@
             },
             {
               label: 'Settings',
-              onClick: function () {
-                self.settingsVisible = !self.settingsVisible;
-                self.settingsDrawer.classList.toggle('hidden', !self.settingsVisible);
+              onClick: function (event) {
+                self.settingsButton = event && event.currentTarget;
+                self.setSettingsVisible(!self.settingsVisible);
               },
               className: 'small',
             },
@@ -269,13 +285,6 @@
               label: 'Load',
               onClick: function () {
                 self.showLoadMenu();
-              },
-              className: 'small',
-            },
-            {
-              label: 'Back',
-              onClick: function () {
-                App.show('home');
               },
               className: 'small',
             },
@@ -354,6 +363,29 @@
       element.appendChild(speed);
 
       this.refreshHud();
+    },
+
+    exitSimulation: function () {
+      App.show('home');
+    },
+
+    setSettingsVisible: function (visible) {
+      this.settingsVisible = !!visible;
+      if (this.settingsDrawer) {
+        this.settingsDrawer.classList.toggle('hidden', !this.settingsVisible);
+      }
+    },
+
+    handleSettingsOutsideClick: function (event) {
+      if (!this.settingsVisible) return;
+      var target = event && event.target;
+      if (
+        (target && this.settingsDrawer && this.settingsDrawer.contains(target)) ||
+        (target && this.settingsButton && this.settingsButton.contains(target))
+      ) {
+        return;
+      }
+      this.setSettingsVisible(false);
     },
 
     buildSettingsDrawer: function (element) {
@@ -518,6 +550,24 @@
       this.trackedCamera.freeX = null;
       this.trackedCamera.freeY = null;
       this.trackedCamera.orthographicSize = this.trackedCamera.initialZoom;
+    },
+
+    ensureFreeCamera: function () {
+      if (this.trackedCamera.freeX === null || this.trackedCamera.freeX === undefined) {
+        this.trackedCamera.freeX = this.trackedCamera.x;
+        this.trackedCamera.freeY = this.trackedCamera.y;
+      }
+    },
+
+    panCameraByScreenDelta: function (dx, dy) {
+      this.ensureFreeCamera();
+      var height = this.camera ? this.camera.height : 0;
+      var pixelsPerUnit = height / (2 * this.trackedCamera.orthographicSize);
+      if (!isFinite(pixelsPerUnit) || pixelsPerUnit <= 0) {
+        pixelsPerUnit = this.camera.pixelsPerUnit();
+      }
+      this.trackedCamera.freeX -= dx / pixelsPerUnit;
+      this.trackedCamera.freeY += dy / pixelsPerUnit;
     },
 
     batchElapsed: function () {
@@ -1008,6 +1058,10 @@
         self.resize();
       };
       global.addEventListener('resize', this.onResize);
+      this.onDocumentClick = function (event) {
+        self.handleSettingsOutsideClick(event);
+      };
+      document.addEventListener('click', this.onDocumentClick);
 
       this.onKeyDown = function (event) {
         if (event.target && /INPUT|TEXTAREA|SELECT/.test(event.target.tagName)) return;
@@ -1058,26 +1112,61 @@
       };
       global.addEventListener('keydown', this.onKeyDown);
 
-      /* Mouse interaction with the camera */
+      /* Camera interaction: one-finger drag, pinch zoom and two-finger pan. */
+      this.gestures = Utils.addTouchGestures(this.canvas, {
+        onGestureStart: function () {
+          self.dragging = null;
+          self.activePointerId = null;
+        },
+        onPinch: function (scale) {
+          self.trackedCamera.setZoom(self.trackedCamera.orthographicSize / scale);
+        },
+        onPan: function (dx, dy) {
+          self.panCameraByScreenDelta(dx, dy);
+        },
+        onGestureEnd: function () {
+          // Ignore the remaining finger until it is lifted; it must not resume
+          // the one-finger drag that preceded the pinch.
+          self.dragging = null;
+          self.activePointerId = null;
+        },
+      });
+
       this.onPointerDown = function (event) {
-        if (event.target !== self.canvas) return;
-        self.dragging = { x: event.clientX, y: event.clientY };
-        self.canvas.setPointerCapture(event.pointerId);
+        if (event.target !== self.canvas || (self.gestures && self.gestures.active)) return;
+        self.activePointerId = event.pointerId;
+        self.dragging = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+        try {
+          self.canvas.setPointerCapture(event.pointerId);
+        } catch (error) {
+          // Pointer capture is unavailable in a few embedded/webview contexts.
+        }
       };
       this.onPointerMove = function (event) {
-        if (!self.dragging) return;
+        if (self.gestures && self.gestures.active) return;
+        if (!self.dragging || event.pointerId !== self.dragging.pointerId) return;
         var dx = event.clientX - self.dragging.x;
         var dy = event.clientY - self.dragging.y;
-        self.dragging = { x: event.clientX, y: event.clientY };
-        if (self.trackedCamera.freeX === null || self.trackedCamera.freeX === undefined) {
-          self.trackedCamera.freeX = self.trackedCamera.x;
-          self.trackedCamera.freeY = self.trackedCamera.y;
-        }
-        self.trackedCamera.freeX -= dx / self.camera.pixelsPerUnit();
-        self.trackedCamera.freeY += dy / self.camera.pixelsPerUnit();
+        self.dragging = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+        self.panCameraByScreenDelta(dx, dy);
       };
-      this.onPointerUp = function () {
+      this.onPointerUp = function (event) {
+        if (!self.dragging || event.pointerId !== self.dragging.pointerId) return;
         self.dragging = null;
+        self.activePointerId = null;
+      };
+      this.onPointerCancel = function (event) {
+        if (!self.dragging || event.pointerId !== self.dragging.pointerId) return;
+        self.dragging = null;
+        self.activePointerId = null;
+      };
+      this.onBlur = function () {
+        self.dragging = null;
+        self.activePointerId = null;
+      };
+      this.onVisibilityChange = function () {
+        self.dragging = null;
+        self.activePointerId = null;
       };
       this.onWheel = function (event) {
         event.preventDefault();
@@ -1088,16 +1177,27 @@
       this.canvas.addEventListener('pointerdown', this.onPointerDown);
       this.canvas.addEventListener('pointermove', this.onPointerMove);
       this.canvas.addEventListener('pointerup', this.onPointerUp);
+      this.canvas.addEventListener('pointercancel', this.onPointerCancel);
+      global.addEventListener('blur', this.onBlur);
+      document.addEventListener('visibilitychange', this.onVisibilityChange);
       this.canvas.addEventListener('wheel', this.onWheel, { passive: false });
     },
 
     detachEvents: function () {
       global.removeEventListener('resize', this.onResize);
+      document.removeEventListener('click', this.onDocumentClick);
       global.removeEventListener('keydown', this.onKeyDown);
+      global.removeEventListener('blur', this.onBlur);
+      document.removeEventListener('visibilitychange', this.onVisibilityChange);
+      if (this.gestures) {
+        this.gestures.detach();
+        this.gestures = null;
+      }
       if (this.canvas) {
         this.canvas.removeEventListener('pointerdown', this.onPointerDown);
         this.canvas.removeEventListener('pointermove', this.onPointerMove);
         this.canvas.removeEventListener('pointerup', this.onPointerUp);
+        this.canvas.removeEventListener('pointercancel', this.onPointerCancel);
         this.canvas.removeEventListener('wheel', this.onWheel);
       }
     },

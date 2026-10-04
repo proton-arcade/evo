@@ -501,6 +501,31 @@
     return best;
   };
 
+  /** Returns the closest bone under a point, ignoring joints and overlays. */
+  CreatureBuilder.prototype.hitTestBone = function (point, tolerance) {
+    tolerance = tolerance === undefined ? 0.6 : tolerance;
+    var maximumDistance = CONNECTION_WIDTH / 2 + tolerance;
+    var best = null;
+    var bestDistance = Infinity;
+
+    for (var i = 0; i < this.design.bones.length; i++) {
+      var bone = this.design.bones[i];
+      var start = this.findJoint(bone.startJointID);
+      var end = this.findJoint(bone.endJointID);
+      if (!start || !end) continue;
+
+      var distance = distanceToSegment(point.x, point.y, start.x, start.y, end.x, end.y);
+      // On an exact overlap, prefer the later bone: it is drawn above earlier
+      // bones by Renderer.drawCreature and is therefore the visible target.
+      if (distance < maximumDistance && distance <= bestDistance) {
+        best = bone;
+        bestDistance = distance;
+      }
+    }
+
+    return best;
+  };
+
   function decorationOffsetInWorld(decoration, bone, builder) {
     var start = builder.findJoint(bone.startJointID);
     var end = builder.findJoint(bone.endJointID);

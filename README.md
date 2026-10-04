@@ -46,6 +46,10 @@ decoration scale/rotation/flip/order) are edited in the right-hand panel. Muscle
 Keyboard: `V` select, `J` joint, `B` bone, `M` muscle, `D` decoration, `E` erase, `Ctrl/Cmd+Z`
 undo, `Ctrl/Cmd+Shift+Z` redo, `Delete` removes the selection, `Esc` cancels a pending placement.
 
+On touch screens, tap to use the active tool, drag a selected joint/bone or empty space with one
+finger, and use two fingers to pan and zoom the editor view. A touch edit is applied when the finger
+lifts, so beginning a two-finger gesture will not accidentally place a component.
+
 ---
 
 ## The simulation
@@ -67,7 +71,30 @@ undo, `Ctrl/Cmd+Shift+Z` redo, `Delete` removes the selection, `Esc` cancels a p
   faded "ghost".
 
 Keyboard: `Space` pause/continue, `V` toggle visibility, `R` reset the camera, arrow keys switch the
-watched creature (or scrub the playback). Mouse: drag to pan, wheel/pinch to zoom.
+watched creature (or scrub the playback). Mouse: drag to pan, wheel/pinch to zoom. On touch screens,
+drag with one finger to pan and use two fingers to pan and zoom.
+
+---
+
+## Mobile and touch screens
+
+Evolution uses Pointer Events for touch input and works in current browsers with Pointer Events
+support (including iOS/iPadOS 13+ and Android Chrome 55+). No app installation or network connection
+is needed; the same `index.html` can be opened locally.
+
+* **Editor:** one-finger taps use the selected tool; drag a joint/bone to move it or empty space to
+  pan. Two fingers pan and zoom. Touch edits are committed on lift to avoid accidental placements
+  when a second finger starts a gesture.
+* **Simulation:** drag with one finger to move the camera; two fingers pan and pinch to zoom. Mouse
+  wheel zoom remains available on desktop.
+* **Gallery:** use two fingers on the recording canvas to pan and zoom the replay.
+* Controls have larger tap targets on touch devices, and editor panels, settings and recording lists
+  can be scrolled with touch momentum. The layout adapts for narrow portrait and landscape screens.
+* Safe-area insets are respected on notched phones. Screen dimensions are refreshed after rotation,
+  browser chrome changes and visual viewport changes such as the on-screen keyboard opening.
+* Canvas backing resolution is capped at 2× device pixel ratio to limit memory and rendering cost on
+  high-density phones and tablets. If the browser interrupts a gesture (for example, when switching
+  apps), the gesture state is cleared so a drag cannot remain stuck.
 
 ---
 
@@ -89,7 +116,7 @@ watched creature (or scrub the playback). Mouse: drag to pan, wheel/pinch to zoo
 ```
 index.html                  the app (loads the scripts in dependency order)
 css/style.css               all styles
-js/core/util.js             math helpers, storage (localStorage with an in-memory fallback), settings, DOM helpers
+js/core/util.js             math helpers, capped display pixel ratio, touch gesture helpers, storage, settings and DOM helpers
 js/core/network.js          feed-forward neural networks and network settings
 js/core/algorithms.js       selection, recombination, mutation, objectives and fitness utilities
 js/core/data.js             creature designs, stats, recordings, save data and encoding/decoding

@@ -97,6 +97,179 @@
     },
   };
 
+  /** Return a canvas pixel ratio that balances sharpness and mobile cost. */
+  MathUtils.displayPixelRatio = function (maxRatio) {
+    var ratio = Number(global.devicePixelRatio);
+    if (!isFinite(ratio) || ratio <= 0) ratio = 1;
+    maxRatio = Number(maxRatio);
+    if (!isFinite(maxRatio) || maxRatio <= 0) maxRatio = 2;
+    return Math.min(ratio, maxRatio);
+  };
+
+  /** Best-effort touch capability check (not a user-agent sniff). */
+  MathUtils.hasTouchScreen = function () {
+    var navigator = global.navigator || {};
+    return (
+      Number(navigator.maxTouchPoints || navigator.msMaxTouchPoints || 0) > 0 ||
+      'ontouchstart' in global
+    );
+  };
+
+  /**
+   * Attach a small Pointer Events based two-finger gesture recognizer.
+   * Centroids are returned in element-local CSS pixels; pan deltas are CSS
+   * pixels. Pinch scale is incremental (new distance / previous distance).
+   */
+  MathUtils.addTouchGestures = function (element, handlers) {
+    handlers = handlers || {};
+    if (!element || !element.addEventListener) {
+      return { active: false, pointerCount: 0, detach: function () {} };
+    }
+
+    var pointers = Object.create(null);
+    var pointerOrder = [];
+    var gestureActive = false;
+    var lastMetrics = null;
+    var detached = false;
+    var controller = {
+      active: false,
+      pointerCount: 0,
+      detach: detach,
+    };
+
+    function pointerId(event) {
+      return event.pointerId === undefined || event.pointerId === null ? 1 : event.pointerId;
+    }
+
+    function updatePointerCount() {
+      controller.pointerCount = pointerOrder.length;
+    }
+
+    function elementMetrics() {
+      var ids = pointerOrder.slice(0, 2);
+      if (ids.length < 2) return null;
+      var first = pointers[ids[0]];
+      var second = pointers[ids[1]];
+      var rect = element.getBoundingClientRect ? element.getBoundingClientRect() : { left: 0, top: 0 };
+      return {
+        x: (first.x + second.x) / 2,
+        y: (first.y + second.y) / 2,
+        cx: (first.x + second.x) / 2 - (rect.left || 0),
+        cy: (first.y + second.y) / 2 - (rect.top || 0),
+        distance: MathUtils.distance(first.x, first.y, second.x, second.y),
+      };
+    }
+
+    function onPointerDown(event) {
+      // Mouse and pen retain their native one-pointer behaviour. Only touch
+      // pointers participate in the two-finger recognizer.
+      if (detached || !event || event.pointerType !== 'touch') return;
+      var id = pointerId(event);
+      if (!Object.prototype.hasOwnProperty.call(pointers, id)) pointerOrder.push(id);
+      pointers[id] = { x: event.clientX || 0, y: event.clientY || 0 };
+      updatePointerCount();
+      if (!gestureActive && controller.pointerCount >= 2) {
+        gestureActive = true;
+        controller.active = true;
+        lastMetrics = elementMetrics();
+        if (handlers.onGestureStart) handlers.onGestureStart(lastMetrics, event);
+      }
+    }
+
+    function onPointerMove(event) {
+      if (detached || !event) return;
+      var id = pointerId(event);
+      if (!Object.prototype.hasOwnProperty.call(pointers, id)) return;
+      pointers[id] = { x: event.clientX || 0, y: event.clientY || 0 };
+      if (!gestureActive) return;
+
+      var metrics = elementMetrics();
+      if (!metrics || !lastMetrics) {
+        lastMetrics = metrics;
+        return;
+      }
+      var dx = metrics.x - lastMetrics.x;
+      var dy = metrics.y - lastMetrics.y;
+      var scale = lastMetrics.distance > 0 ? metrics.distance / lastMetrics.distance : 1;
+      lastMetrics = metrics;
+
+      if (isFinite(scale) && Math.abs(scale - 1) > 0.0001 && handlers.onPinch) {
+        handlers.onPinch(scale, metrics.cx, metrics.cy, event);
+      }
+      if ((dx !== 0 || dy !== 0) && handlers.onPan) {
+        handlers.onPan(dx, dy, metrics.cx, metrics.cy, event);
+      }
+    }
+
+    function finishPointer(event) {
+      if (detached || !event) return;
+      var id = pointerId(event);
+      if (!Object.prototype.hasOwnProperty.call(pointers, id)) return;
+      delete pointers[id];
+      pointerOrder = pointerOrder.filter(function (pointer) {
+        return pointer !== id;
+      });
+      updatePointerCount();
+
+      if (gestureActive && controller.pointerCount < 2) {
+        gestureActive = false;
+        controller.active = false;
+        lastMetrics = null;
+        if (handlers.onGestureEnd) handlers.onGestureEnd(event);
+      } else if (gestureActive) {
+        // A third finger may have been present. Establish a fresh baseline
+        // after one of the tracked pair is lifted to avoid a jump.
+        lastMetrics = elementMetrics();
+      }
+    }
+
+    function reset(event, notify) {
+      var wasActive = gestureActive;
+      pointers = Object.create(null);
+      pointerOrder = [];
+      gestureActive = false;
+      lastMetrics = null;
+      controller.active = false;
+      controller.pointerCount = 0;
+      if (wasActive && notify && handlers.onGestureEnd) handlers.onGestureEnd(event || null);
+    }
+
+    function onVisibilityChange(event) {
+      reset(event, true);
+    }
+
+    function detach() {
+      if (detached) return;
+      detached = true;
+      element.removeEventListener('pointerdown', onPointerDown);
+      element.removeEventListener('pointerup', finishPointer);
+      element.removeEventListener('pointercancel', finishPointer);
+      global.removeEventListener('pointermove', onPointerMove);
+      global.removeEventListener('pointerup', finishPointer);
+      global.removeEventListener('pointercancel', finishPointer);
+      global.removeEventListener('blur', onWindowBlur);
+      if (global.document) global.document.removeEventListener('visibilitychange', onVisibilityChange);
+      reset(null, false);
+    }
+
+    function onWindowBlur(event) {
+      reset(event, true);
+    }
+
+    element.addEventListener('pointerdown', onPointerDown);
+    element.addEventListener('pointerup', finishPointer);
+    element.addEventListener('pointercancel', finishPointer);
+    // Pointer events bubble to window, including releases outside the element.
+    // Listening there avoids stale pointer state when a finger leaves the canvas.
+    global.addEventListener('pointermove', onPointerMove);
+    global.addEventListener('pointerup', finishPointer);
+    global.addEventListener('pointercancel', finishPointer);
+    global.addEventListener('blur', onWindowBlur);
+    if (global.document) global.document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return controller;
+  };
+
   /* ------------------------------------------------------------------ *
    * GaussianPRNG (Box-Muller transform) — port of Util/GaussianPRNG.cs
    * ------------------------------------------------------------------ */
