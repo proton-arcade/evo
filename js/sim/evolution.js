@@ -345,7 +345,8 @@
     this.world.simulate(dt, PHYSICS_SUBSTEPS, PHYSICS_ITERATIONS);
     this.world.forceCallbacks.pop();
 
-    // 3. Dynamic structures (rolling obstacles)
+    // 3. Scene updates legacy dynamic structures; the default obstacle
+    // course is made of static blocks and needs no per-frame spawning.
     this.scene.update(dt);
 
     // 4. Book keeping

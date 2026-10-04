@@ -72,6 +72,17 @@
   Creature.CONNECTION_WIDTH = CONNECTION_WIDTH;
   Creature.MUSCLE_SPRING_STRENGTH = MUSCLE_SPRING_STRENGTH;
   Creature.MAX_MUSCLE_FORCE = MAX_MUSCLE_FORCE;
+  // Game-scale 2D wing tuning. Area is wing length × editable chord width;
+  // the force scale can be calibrated without changing creature mass units.
+  Creature.WING_AIR_DENSITY = 1.0;
+  Creature.WING_FORCE_SCALE = 36.0;
+  Creature.WING_DRAG_COEFFICIENT = 0.9;
+  Creature.WING_MAX_LIFT_COEFFICIENT = 1.2;
+  Creature.WING_FLAP_LIFT_COEFFICIENT = 0.75;
+  Creature.WING_MAX_FORCE = 1800;
+  Creature.WING_MIN_SPEED = 0.1;
+  Creature.WING_AERO_CENTER_FRACTION = 0.72;
+  Creature.WING_MAX_ANGLE_OF_ATTACK = 80 * Utils.Deg2Rad;
   Creature.MuscleAction = MuscleAction;
 
   /* ------------------------------------------------------------------ *
@@ -138,6 +149,7 @@
         halfLength: restLength / 2,
         isWing: !!data.isWing,
         inverted: !!data.inverted,
+        wingChord: data.wingChord === undefined ? 1 : data.wingChord,
         direction: { x: 0, y: 1 },
         center: { x: 0, y: 0 },
         angle: 0,
@@ -373,43 +385,157 @@
   };
 
   /**
-   * Port of Bone.FixedUpdate — the wings generate a force perpendicular to
-   * their own orientation, based on their velocity in their local frame.
+   * Applies a bounded game-scale aerodynamic force at a wing's aerodynamic
+   * center. The endpoint average misses the velocity caused by flapping, so
+   * the local point velocity includes omega × radius from the wing root.
    */
   Creature.prototype.applyWingForce = function (bone) {
     if (!bone.isWing) return;
 
-    var centerVelocityX = (bone.startJoint.body.vx + bone.endJoint.body.vx) / 2;
-    var centerVelocityY = (bone.startJoint.body.vy + bone.endJoint.body.vy) / 2;
+    var root = bone.startJoint.body;
+    var direction = bone.direction;
+    var length = Math.max(0.01, bone.length || bone.halfLength * 2 || 0.01);
+    var centerFraction = Creature.WING_AERO_CENTER_FRACTION;
+    var radiusX = direction.x * length * centerFraction;
+    var radiusY = direction.y * length * centerFraction;
+    var angularVelocity = bone.angularVelocity || 0;
 
-    // Local frame: local +y is the bone direction, local +x the perpendicular.
-    var rightX = Math.cos(bone.angle);
-    var rightY = Math.sin(bone.angle);
+    // Velocity at a rotating wing point: v(root) + angular velocity × radius.
+    var pointVelocityX = root.vx - angularVelocity * radiusY;
+    var pointVelocityY = root.vy + angularVelocity * radiusX;
+    var airflowX = -pointVelocityX;
+    var airflowY = -pointVelocityY;
+    var speed = Math.sqrt(airflowX * airflowX + airflowY * airflowY);
+    var chord = Math.max(0.1, bone.wingChord || (bone.data && bone.data.wingChord) || 1);
+    var area = length * chord;
+    var centerX = root.x + radiusX;
+    var centerY = root.y + radiusY;
 
-    var localVelocityX = centerVelocityX * rightX + centerVelocityY * rightY;
-    // The local +y axis in world space is the bone direction.
-    var localVelocityY = centerVelocityX * bone.direction.x + centerVelocityY * bone.direction.y;
+    var aerodynamicCenter = bone.aerodynamicCenter || (bone.aerodynamicCenter = { x: 0, y: 0 });
+    aerodynamicCenter.x = centerX;
+    aerodynamicCenter.y = centerY;
+    var debug = bone.wingDebug;
+    if (!debug) {
+      debug = bone.wingDebug = {
+        speed: 0,
+        angleOfAttack: 0,
+        area: 0,
+        lift: 0,
+        flapLift: 0,
+        drag: 0,
+        liftX: 0,
+        liftY: 0,
+        dragX: 0,
+        dragY: 0,
+        forceX: 0,
+        forceY: 0,
+        activeStroke: false,
+      };
+    }
+    debug.speed = speed;
+    debug.angleOfAttack = 0;
+    debug.area = area;
+    debug.lift = 0;
+    debug.flapLift = 0;
+    debug.drag = 0;
+    debug.liftX = 0;
+    debug.liftY = 0;
+    debug.dragX = 0;
+    debug.dragY = 0;
+    debug.forceX = 0;
+    debug.forceY = 0;
+    debug.activeStroke = false;
+    if (speed < Creature.WING_MIN_SPEED) return;
 
-    var speed = Math.sqrt(localVelocityX * localVelocityX + localVelocityY * localVelocityY);
-    if (speed < 1.0) return;
+    var inverted = bone.inverted === undefined ? !!bone.data.inverted : !!bone.inverted;
+    // Only the powered half of the flap produces force. Invert selects which
+    // vertical stroke is powered; this avoids symmetric up/down drag cancelling
+    // all lift at a stationary takeoff.
+    var activeStroke = Math.abs(pointVelocityY) < 0.05 ||
+      (inverted ? pointVelocityY > 0 : pointVelocityY < 0);
+    debug.activeStroke = activeStroke;
+    if (!activeStroke) return;
 
-    // Signed angle between the local velocity and the local up vector (0, 1).
-    var cross = localVelocityX * 1 - localVelocityY * 0; // cross(v, up).z
-    var dot = localVelocityX * 0 + localVelocityY * 1;
-    var localAngle = Math.atan2(cross, dot) * Utils.Rad2Deg;
+    var flowDirectionX = airflowX / speed;
+    var flowDirectionY = airflowY / speed;
+    var spanX = direction.x;
+    var spanY = direction.y;
+    var dot = spanX * airflowX + spanY * airflowY;
+    var cross = spanX * airflowY - spanY * airflowX;
+    var angleOfAttack = Math.atan2(cross, dot);
+    angleOfAttack = Utils.clamp(
+      angleOfAttack,
+      -Creature.WING_MAX_ANGLE_OF_ATTACK,
+      Creature.WING_MAX_ANGLE_OF_ATTACK
+    );
 
-    if (bone.data.inverted !== (localAngle < 0)) {
-      // We make it easier to move the wing up by not generating any opposing force.
-      return;
+    var dynamicPressure =
+      0.5 * Creature.WING_AIR_DENSITY * area * speed * speed * Creature.WING_FORCE_SCALE;
+    var angleFactor = Math.abs(Math.sin(angleOfAttack));
+    var liftCoefficient = Utils.clamp(
+      Creature.WING_MAX_LIFT_COEFFICIENT * angleFactor,
+      0,
+      Creature.WING_MAX_LIFT_COEFFICIENT
+    );
+    var aerodynamicLiftMagnitude = dynamicPressure * liftCoefficient;
+    var dragMagnitude = dynamicPressure * Creature.WING_DRAG_COEFFICIENT;
+
+    // Aerodynamic lift is perpendicular to relative airflow; pitch determines
+    // its sign. A bounded vertical flap-lift component lets a stationary
+    // downstroke support takeoff in this 2D game model.
+    var liftSign = angleOfAttack < 0 ? -1 : 1;
+    if (inverted) liftSign *= -1;
+    var liftX = -flowDirectionY * liftSign * aerodynamicLiftMagnitude;
+    var liftY = flowDirectionX * liftSign * aerodynamicLiftMagnitude;
+    var flapLiftMagnitude =
+      dynamicPressure * Creature.WING_FLAP_LIFT_COEFFICIENT *
+      Utils.clamp(Math.abs(pointVelocityY) / speed, 0, 1) * angleFactor;
+    liftY += flapLiftMagnitude;
+    var liftMagnitude = Math.sqrt(liftX * liftX + liftY * liftY);
+
+    // Drag points with the relative airflow (opposite the wing's motion).
+    var dragX = flowDirectionX * dragMagnitude;
+    var dragY = flowDirectionY * dragMagnitude;
+    var forceX = liftX + dragX;
+    var forceY = liftY + dragY;
+
+    var forceMagnitude = Math.sqrt(forceX * forceX + forceY * forceY);
+    if (forceMagnitude > Creature.WING_MAX_FORCE) {
+      var forceScale = Creature.WING_MAX_FORCE / forceMagnitude;
+      liftX *= forceScale;
+      liftY *= forceScale;
+      dragX *= forceScale;
+      dragY *= forceScale;
+      forceX *= forceScale;
+      forceY *= forceScale;
+      liftMagnitude *= forceScale;
+      flapLiftMagnitude *= forceScale;
+      dragMagnitude *= forceScale;
     }
 
-    var maxForce = 30.0 * bone.halfLength;
-    var angleFactor = 1.0 - Math.abs(Math.abs(localAngle) - 90.0) / 90.0;
-    var velocityFactor = speed;
-    var force = velocityFactor * -Utils.sign(localAngle) * maxForce * angleFactor;
+    debug.angleOfAttack = angleOfAttack;
+    debug.lift = liftMagnitude;
+    debug.flapLift = flapLiftMagnitude;
+    debug.drag = dragMagnitude;
+    debug.liftX = liftX;
+    debug.liftY = liftY;
+    debug.dragX = dragX;
+    debug.dragY = dragY;
+    debug.forceX = forceX;
+    debug.forceY = forceY;
 
-    applyBoneForce(bone, rightX * force * 0.5, rightY * force * 0.5);
+    applyWingForceAtPoint(bone, forceX, forceY, centerFraction);
   };
+
+  /** Distributes the force at the wing center to its two endpoint masses. */
+  function applyWingForceAtPoint(bone, fx, fy, fraction) {
+    var root = bone.startJoint.body;
+    var tip = bone.endJoint.body;
+    root.fx += fx * (1 - fraction);
+    root.fy += fy * (1 - fraction);
+    tip.fx += fx * fraction;
+    tip.fy += fy * fraction;
+  }
 
   /** Distributes a force (already halved) onto both joints of a bone. */
   function applyBoneForce(bone, fx, fy) {

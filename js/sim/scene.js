@@ -9,8 +9,8 @@
  * Every task has its own scene:
  *
  *   Running / Jumping / Flying  — a flat ground plane.
- *   Obstacle Jump               — two walls and rolling obstacles that are
- *                                 launched towards the creature.
+ *   Obstacle Jump               — a short course of fixed blocks that grow
+ *                                 progressively taller and wider.
  *   Climbing                    — an infinite staircase at a 45° angle.
  */
 (function (global) {
@@ -25,6 +25,7 @@
     Stairstep: 'evolution::structure::stairstep',
     StepSpawner: 'evolution::structure::stepspawner',
     RollingObstacleSpawner: 'evolution::structure::rollingobstaclespawner',
+    ObstacleBlockSpawner: 'evolution::structure::obstacleblockspawner',
     DistanceMarkerSpawner: 'evolution::structure::distancemarkerspawner',
   };
 
@@ -207,17 +208,24 @@
       var ground = structure(StructureType.Ground, 0.476771, -4.8, 1000, 9.56, 0);
       var rightWall = structure(StructureType.Wall, 40, -4.8, 100, 35.78, 90);
       var leftWall = structure(StructureType.Wall, -41.73, -4.8, 100, 35.78, 90);
-      var obstacleSpawner = structure(
-        StructureType.RollingObstacleSpawner,
-        31.1,
-        4.41,
+      var blockCourse = structure(
+        StructureType.ObstacleBlockSpawner,
+        7,
+        -0.02,
         1,
         1,
-        180,
-        { spawnInterval: 5, obstacleLifetime: 5, forceMultiplier: 1 }
+        0,
+        {
+          blockCount: 5,
+          blockSpacing: 6.2,
+          startWidth: 1.2,
+          widthIncrease: 0.22,
+          startHeight: 1.1,
+          heightIncrease: 0.42,
+        }
       );
       return SimulationSceneDescription.create(
-        [ground, leftWall, rightWall, obstacleSpawner],
+        [ground, leftWall, rightWall, blockCourse],
         0.5,
         FLAT_GROUND_CONTROL_POINTS
       );
@@ -270,6 +278,7 @@
     this.structures = [];
     this.renderables = [];
     this.distanceMarkers = [];
+    this.blocks = [];
     this.obstacles = [];
     this.obstacleSpawners = [];
     this.spawnTimers = [];
@@ -298,6 +307,9 @@
           break;
         case StructureType.RollingObstacleSpawner:
           self.buildObstacleSpawner(entry);
+          break;
+        case StructureType.ObstacleBlockSpawner:
+          self.buildObstacleBlockCourse(entry);
           break;
         case StructureType.DistanceMarkerSpawner:
           self.buildDistanceMarkers(entry);
@@ -369,8 +381,43 @@
   };
 
   Scene.prototype.buildObstacleSpawner = function (entry) {
+    // Retained for simulations imported from older saves. The default
+    // Obstacle Jump scene now uses a fixed block course instead.
     this.obstacleSpawners.push(entry);
     this.spawnTimers.push(0);
+  };
+
+  /** Builds a static course whose blocks get a little larger as it progresses. */
+  Scene.prototype.buildObstacleBlockCourse = function (entry) {
+    var transform = entry.transform;
+    var params = entry.params || {};
+    var count = Utils.clamp(Math.round(params.blockCount === undefined ? 5 : params.blockCount), 1, 20);
+    var spacing = params.blockSpacing === undefined ? 6.2 : Math.max(1, params.blockSpacing);
+    var startWidth = params.startWidth === undefined ? 1.2 : Math.max(0.5, params.startWidth);
+    var widthIncrease = params.widthIncrease === undefined ? 0.22 : Math.max(0, params.widthIncrease);
+    var startHeight = params.startHeight === undefined ? 1.1 : Math.max(0.5, params.startHeight);
+    var heightIncrease = params.heightIncrease === undefined ? 0.42 : Math.max(0, params.heightIncrease);
+
+    for (var i = 0; i < count; i++) {
+      var width = startWidth + i * widthIncrease;
+      var height = startHeight + i * heightIncrease;
+      var x = transform.x + i * spacing;
+      var y = transform.y + height / 2;
+      var blockEntry = structure('evolution::structure::obstacleblock', x, y, width, height, 0);
+      var box = this.addBox(blockEntry, COLORS.obstacle, 'Obstacle');
+      this.blocks.push({
+        index: i,
+        x: x,
+        y: y,
+        width: width,
+        height: height,
+        left: x - width / 2,
+        right: x + width / 2,
+        bottom: transform.y,
+        top: transform.y + height,
+        box: box,
+      });
+    }
   };
 
   Scene.prototype.buildDistanceMarkers = function (entry) {
@@ -616,9 +663,10 @@
     return true;
   };
 
-  /** The scene keeps track of only one obstacle at a time for the legacy brain. */
+  /** Returns the next legacy moving obstacle or the first block in the course. */
   Scene.prototype.getObstacle = function () {
-    return this.obstacles.length ? this.obstacles[0] : null;
+    if (this.obstacles.length) return this.obstacles[0];
+    return this.blocks.length ? this.blocks[0] : null;
   };
 
   /* ------------------------------------------------------------------ *

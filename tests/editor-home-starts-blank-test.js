@@ -58,7 +58,11 @@ global.innerHeight = 600;
 global.EVO = {
   UI: { el: element },
   Utils: {},
-  Store: {},
+  Store: {
+    getString: function (key, defaultValue) { return defaultValue; },
+    getJSON: function (key, defaultValue) { return defaultValue; },
+    remove: function () {},
+  },
   Settings: { LastCreatureDesign: JSON.stringify(persistedDesign) },
   Screens: {},
   CreatureDesign: {

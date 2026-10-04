@@ -238,7 +238,9 @@
             'evo-button' + (action.primary ? ' primary' : '') + (action.danger ? ' danger' : ''),
             action.label
           );
+          button.disabled = !!action.disabled;
           button.addEventListener('click', function () {
+            if (button.disabled) return;
             if (action.close !== false) self.close();
             if (action.onClick) action.onClick();
           });
@@ -283,6 +285,11 @@
     return Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
   }
 
+  function objectiveBrainKey(objective) {
+    var name = EVO.ObjectiveUtil.stringRepresentation(objective).replace(/[^a-z0-9]/gi, '');
+    return name ? name.charAt(0).toLowerCase() + name.substr(1) : 'running';
+  }
+
   var Storage = {
     getDesigns: function () {
       var designs = Store.getJSON('designs', []);
@@ -303,6 +310,9 @@
       var replaced = false;
       for (var i = 0; i < designs.length; i++) {
         if (designs[i].id === entry.id) {
+          // Editing the phenotype must not erase the action-specific brains.
+          entry.evolvedBrains = designs[i].evolvedBrains;
+          entry.evolvedCreature = designs[i].evolvedCreature;
           designs[i] = entry;
           replaced = true;
           break;
@@ -313,42 +323,79 @@
       return entry.id;
     },
 
-    /** Saves one evolved phenotype as a creature entry, with its brain intact. */
-    saveEvolvedCreature: function (recording, chromosome, networkSettings, lastV2Generation) {
-      if (!recording || !recording.creatureDesign || !chromosome || !chromosome.length) {
-        throw new Error('There is no evolved creature to save yet.');
+    getEvolvedBrainProfiles: function (entry) {
+      if (!entry) return [];
+      var profiles = entry.evolvedBrains || {};
+      var result = [];
+      EVO.ObjectiveUtil.ALL_OBJECTIVES.forEach(function (objective) {
+        var profile = profiles[objectiveBrainKey(objective)];
+        if (!profile && entry.evolvedCreature && entry.evolvedCreature.task === objective) {
+          profile = entry.evolvedCreature;
+        }
+        if (profile) result.push(profile);
+      });
+      return result;
+    },
+
+    getEvolvedBrain: function (entry, objective) {
+      if (!entry) return null;
+      var profile = entry.evolvedBrains && entry.evolvedBrains[objectiveBrainKey(objective)];
+      if (profile) return profile;
+      return entry.evolvedCreature && entry.evolvedCreature.task === objective
+        ? entry.evolvedCreature
+        : null;
+    },
+
+    /** Replaces one action brain on an existing creature and refreshes its best replay. */
+    saveEvolvedBrain: function (creatureId, recording, chromosome, networkSettings, lastV2Generation) {
+      if (!creatureId) throw new Error('Save this creature to My Creatures before saving its brain.');
+      if (!recording || !recording.creatureDesign || !recording.movementData || !chromosome || !chromosome.length) {
+        throw new Error('There is no completed generation brain and replay to save yet.');
       }
-      var design = EVO.CreatureDesign.clone(recording.creatureDesign);
-      var taskName = EVO.ObjectiveUtil.stringRepresentation(recording.task);
-      var suffix = ' - ' + taskName + ' Gen ' + recording.generation;
-      var baseName = design.name && design.name !== 'Unnamed' ? design.name : 'Creature';
-      design.name = baseName.substr(0, Math.max(1, 40 - suffix.length)) + suffix;
       var designs = Store.getJSON('designs', []);
-      var entry = {
-        id: makeId(),
-        name: design.name,
-        design: EVO.CreatureDesign.encode(design),
-        date: new Date().toISOString(),
-        evolvedCreature: {
-          task: recording.task,
-          generation: recording.generation,
-          chromosome: chromosome.map(function (weight) {
-            return Utils.round4(weight);
-          }),
-          networkSettings: EVO.NeuralNetworkSettings.encode(
-            networkSettings || recording.networkSettings
-          ),
-          scene:
-            recording.sceneDescription && EVO.SimulationSceneDescription
-              ? EVO.SimulationSceneDescription.encode(recording.sceneDescription)
-              : null,
-          stats: recording.stats ? EVO.CreatureStats.encode(recording.stats) : null,
-          lastV2SimulatedGeneration: lastV2Generation || 0,
-        },
+      var entry = null;
+      for (var i = 0; i < designs.length; i++) {
+        if (designs[i].id === creatureId) {
+          entry = designs[i];
+          break;
+        }
+      }
+      if (!entry) throw new Error('The original creature is no longer in My Creatures.');
+
+      var taskKey = objectiveBrainKey(recording.task);
+      var profiles = entry.evolvedBrains || {};
+      if (entry.evolvedCreature && !profiles[objectiveBrainKey(entry.evolvedCreature.task)]) {
+        // Migrate the previous single-brain format without losing its profile.
+        profiles[objectiveBrainKey(entry.evolvedCreature.task)] = entry.evolvedCreature;
+      }
+      var previousProfile = profiles[taskKey];
+      var taskName = EVO.ObjectiveUtil.stringRepresentation(recording.task);
+      var replayName = (entry.name || 'Creature') + ' · ' + taskName + ' · Gen ' + recording.generation;
+      var replayId = this.saveRecording(recording, replayName, previousProfile && previousProfile.replayId);
+      var profile = {
+        task: recording.task,
+        generation: recording.generation,
+        chromosome: chromosome.map(function (weight) {
+          return Utils.round4(weight);
+        }),
+        networkSettings: EVO.NeuralNetworkSettings.encode(
+          networkSettings || recording.networkSettings
+        ),
+        scene:
+          recording.sceneDescription && EVO.SimulationSceneDescription
+            ? EVO.SimulationSceneDescription.encode(recording.sceneDescription)
+            : null,
+        stats: recording.stats ? EVO.CreatureStats.encode(recording.stats) : null,
+        lastV2SimulatedGeneration: lastV2Generation || 0,
+        replayId: replayId,
       };
-      designs.unshift(entry);
+      profiles[taskKey] = profile;
+      entry.evolvedBrains = profiles;
+      // Keep a latest-profile alias for old imported clients and saves.
+      entry.evolvedCreature = profile;
+      entry.date = new Date().toISOString();
       Store.setJSON('designs', designs);
-      return entry.id;
+      return { creatureId: creatureId, replayId: replayId, profile: profile };
     },
 
     deleteDesign: function (id) {
@@ -365,16 +412,30 @@
       });
     },
 
-    saveRecording: function (recording) {
+    saveRecording: function (recording, customName, existingId) {
       var recordings = Store.getJSON('recordings', []);
+      var fallbackName = 'Generation ' + recording.generation + ' · ' +
+        EVO.ObjectiveUtil.stringRepresentation(recording.task);
+      var name = typeof customName === 'string' && customName.trim()
+        ? customName.trim().substr(0, 60)
+        : fallbackName;
       var entry = {
-        id: makeId(),
+        id: existingId || makeId(),
+        name: name,
         generation: recording.generation,
         task: recording.task,
         date: new Date().toISOString(),
         fitness: recording.stats.unclampedFitness,
         recording: EVO.CreatureRecording.encode(recording),
       };
+      var existingIndex = -1;
+      for (var i = 0; i < recordings.length; i++) {
+        if (recordings[i].id === entry.id) {
+          existingIndex = i;
+          break;
+        }
+      }
+      if (existingIndex !== -1) recordings.splice(existingIndex, 1);
       recordings.unshift(entry);
       // Keep the storage small.
       if (recordings.length > 20) recordings = recordings.slice(0, 20);
@@ -440,6 +501,7 @@
     screens: {},
     current: null,
     currentName: null,
+    currentDesignId: null,
 
     register: function (name, screen) {
       EVO.Screens = EVO.Screens || {};
@@ -448,12 +510,24 @@
 
     start: function () {
       this.currentDesign = null;
+      this.currentDesignId = Store.getString('LAST_CREATURE_DESIGN_ID_KEY', '') || null;
       var lastDesign = Settings.LastCreatureDesign;
       if (lastDesign) {
         try {
           this.currentDesign = EVO.CreatureDesign.decode(lastDesign);
         } catch (error) {
           this.currentDesign = null;
+        }
+      }
+      if (!this.currentDesign) {
+        this.currentDesignId = null;
+        Store.remove('LAST_CREATURE_DESIGN_ID_KEY');
+      } else if (this.currentDesignId) {
+        var savedEntries = Store.getJSON('designs', []);
+        var idExists = savedEntries.some(function (entry) { return entry.id === App.currentDesignId; });
+        if (!idExists) {
+          this.currentDesignId = null;
+          Store.remove('LAST_CREATURE_DESIGN_ID_KEY');
         }
       }
       this.root = document.getElementById('screens');
@@ -522,8 +596,13 @@
       return this.currentDesign || EVO.CreatureDesign.empty();
     },
 
-    setDesign: function (design) {
+    setDesign: function (design, designId) {
       this.currentDesign = design;
+      if (arguments.length > 1) {
+        this.currentDesignId = designId || null;
+        if (this.currentDesignId) Store.setString('LAST_CREATURE_DESIGN_ID_KEY', this.currentDesignId);
+        else Store.remove('LAST_CREATURE_DESIGN_ID_KEY');
+      }
       Store.setString('LAST_CREATURE_DESIGN_KEY', JSON.stringify(EVO.CreatureDesign.encode(design)));
     },
   };
@@ -547,7 +626,7 @@
       );
       actions.appendChild(
         this.bigButton('Start Simulation', 'Evolve the current creature design', function () {
-          App.show('simulation', {});
+          App.show('simulation', { designId: App.currentDesignId });
         })
       );
       actions.appendChild(
@@ -651,6 +730,12 @@
       designs.forEach(function (entry) {
         var row = UI.el('div', 'list-row');
         var main = UI.el('div', 'list-row-main');
+        var brainProfiles = Storage.getEvolvedBrainProfiles(entry);
+        var brainSummary = brainProfiles.length
+          ? ' · brains: ' + brainProfiles.map(function (profile) {
+              return EVO.ObjectiveUtil.stringRepresentation(profile.task) + ' Gen ' + profile.generation;
+            }).join(', ')
+          : '';
         main.appendChild(UI.el('span', 'list-row-title', entry.name || 'Unnamed'));
         main.appendChild(
           UI.el(
@@ -661,13 +746,7 @@
               entry.design.bones.length +
               ' bones · ' +
               entry.design.muscles.length +
-              ' muscles' +
-              (entry.evolvedCreature
-                ? ' · evolved ' +
-                  EVO.ObjectiveUtil.stringRepresentation(entry.evolvedCreature.task).toLowerCase() +
-                  ' · gen ' +
-                  entry.evolvedCreature.generation
-                : '')
+              ' muscles' + brainSummary
           )
         );
         row.appendChild(main);
@@ -682,26 +761,43 @@
             {
               label: 'Simulate',
               onClick: function () {
-                App.setDesign(entry.design);
-                if (entry.evolvedCreature) {
-                  var profile = entry.evolvedCreature;
-                  var settings = EVO.SimulationSettings.forObjective(profile.task);
-                  var networkSettings = EVO.NeuralNetworkSettings.decode(profile.networkSettings);
-                  var scene = profile.scene
-                    ? EVO.SimulationSceneDescription.decode(profile.scene)
-                    : EVO.DefaultSimulationScenes.defaultSceneForObjective(profile.task);
-                  var data = EVO.SimulationData.create(
-                    settings,
-                    networkSettings,
-                    EVO.CreatureDesign.clone(entry.design),
-                    scene
-                  );
-                  data.CurrentChromosomes = [profile.chromosome.slice()];
-                  data.LastV2SimulatedGeneration = profile.lastV2SimulatedGeneration || 0;
-                  App.show('simulation', { data: data });
-                } else {
-                  App.show('simulation', {});
-                }
+                var actions = EVO.ObjectiveUtil.ALL_OBJECTIVES.map(function (objective) {
+                  var profile = Storage.getEvolvedBrain(entry, objective);
+                  var actionName = EVO.ObjectiveUtil.stringRepresentation(objective);
+                  return {
+                    label: profile
+                      ? actionName + ' · saved Gen ' + profile.generation
+                      : 'Train ' + actionName + ' brain',
+                    primary: !!profile,
+                    onClick: function () {
+                      App.setDesign(entry.design, entry.id);
+                      var settings = EVO.SimulationSettings.forObjective(objective);
+                      var networkSettings = profile && profile.networkSettings
+                        ? EVO.NeuralNetworkSettings.decode(profile.networkSettings)
+                        : EVO.NeuralNetworkSettings.decode(Settings.NetworkSettings);
+                      var scene = profile && profile.scene
+                        ? EVO.SimulationSceneDescription.decode(profile.scene)
+                        : EVO.DefaultSimulationScenes.defaultSceneForObjective(objective);
+                      var data = EVO.SimulationData.create(
+                        settings,
+                        networkSettings,
+                        EVO.CreatureDesign.clone(entry.design),
+                        scene
+                      );
+                      data.LibraryCreatureId = entry.id;
+                      if (profile && profile.chromosome && profile.chromosome.length) {
+                        data.CurrentChromosomes = [profile.chromosome.slice()];
+                        data.LastV2SimulatedGeneration = profile.lastV2SimulatedGeneration || 0;
+                      }
+                      App.show('simulation', { data: data, designId: entry.id });
+                    },
+                  };
+                });
+                Modal.open({
+                  title: 'Choose an action brain',
+                  message: 'Choose a task to train, or continue from that task’s saved brain. Saving a brain replaces only that task and updates its best-generation replay.',
+                  actions: actions.concat([{ label: 'Cancel' }]),
+                });
               },
             },
             {
@@ -748,7 +844,7 @@
             {
               label: 'Simulate',
               onClick: function () {
-                App.setDesign(sample.design);
+                App.setDesign(sample.design, null);
                 App.show('simulation', {});
               },
             },
@@ -984,7 +1080,7 @@
           body:
             'Place joints with the joint tool, connect them with bones and add muscles between two bones. ' +
             'Muscles contract or expand depending on the output of the creature\'s brain. ' +
-            'Use the settings panel to change weights, muscle strengths and to mark bones as wings.',
+            'Use the settings panel to change weights and muscle strengths, mark wing bones, adjust their chord, and invert their powered stroke.',
         },
         {
           title: 'How the evolution works',
@@ -993,8 +1089,8 @@
             'feed forward neural network whose weights are the creature\'s genome. After each generation the ' +
             'best creatures are selected and their genomes are recombined and mutated to form the next generation. ' +
             'The fitness function depends on the task: running rewards horizontal distance, jumping the maximum ' +
-            'height, climbing the vertical distance, flying the time spent above the ground and the height, ' +
-            'and the obstacle jump rewards jumping over the rolling obstacles without touching them.',
+            'height, climbing the vertical distance, flying sustained time above the ground and average height, ' +
+            'and the obstacle jump rewards clearing a course of progressively larger blocks.',
         },
         {
           title: 'Brain inputs',

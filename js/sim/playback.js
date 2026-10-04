@@ -43,6 +43,7 @@
         angle: 0,
         inverted: !!bone.inverted,
         isWing: !!bone.isWing,
+        wingChord: bone.wingChord === undefined ? 1 : bone.wingChord,
       };
     });
 

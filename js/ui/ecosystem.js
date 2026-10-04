@@ -35,6 +35,7 @@
         name: entry.name || 'Unnamed',
         design: entry.design,
         evolvedCreature: entry.evolvedCreature || null,
+        evolvedBrains: entry.evolvedBrains || null,
         source: 'Your library',
       };
     });
@@ -89,7 +90,7 @@
         UI.el(
           'p',
           'ecosystem-intro',
-          'Choose two to six creatures to share one world. Evolved library creatures keep their saved brain; other designs get a fresh exploratory brain for this run.'
+          'Choose two to six creatures to share one world. Each library creature reuses its saved brain for the selected action when available.'
         )
       );
 
@@ -105,6 +106,7 @@
       objectiveSelect.value = String(this.objective);
       objectiveSelect.addEventListener('change', function () {
         self.objective = parseInt(objectiveSelect.value, 10);
+        self.refreshChoices();
       });
       objectiveRow.appendChild(objectiveSelect);
       controls.appendChild(objectiveRow);
@@ -167,13 +169,13 @@
       var description = UI.el('span', 'ecosystem-card-content');
       description.appendChild(UI.el('span', 'ecosystem-card-name', entry.name));
       var subtitle = entry.source + ' · ' + entry.design.joints.length + ' joints';
-      if (entry.evolvedCreature) {
-        subtitle +=
-          ' · evolved ' +
-          EVO.ObjectiveUtil.stringRepresentation(entry.evolvedCreature.task).toLowerCase() +
-          ' · gen ' +
-          entry.evolvedCreature.generation;
+      var brainTasks = Object.keys(entry.evolvedBrains || {}).map(function (key) {
+        return EVO.ObjectiveUtil.stringRepresentation(entry.evolvedBrains[key].task);
+      });
+      if (!brainTasks.length && entry.evolvedCreature) {
+        brainTasks.push(EVO.ObjectiveUtil.stringRepresentation(entry.evolvedCreature.task));
       }
+      if (brainTasks.length) subtitle += ' · brains: ' + brainTasks.join(', ');
       description.appendChild(UI.el('span', 'ecosystem-card-subtitle', subtitle));
       card.appendChild(description);
       return card;
@@ -192,12 +194,13 @@
         checkbox.disabled = count >= MAX_ECOSYSTEM_CREATURES && !selected;
         card.classList.toggle('selected', selected);
       });
+      var selectedAction = EVO.ObjectiveUtil.stringRepresentation(this.objective);
       if (count < 2) {
-        this.setupMessage.textContent = 'Select at least two creatures. Evolved library creatures keep their saved brain.';
+        this.setupMessage.textContent = 'Select at least two creatures. Matching saved ' + selectedAction + ' brains are reused.';
       } else if (count >= MAX_ECOSYSTEM_CREATURES) {
         this.setupMessage.textContent = 'Six residents selected — uncheck one to make room for another.';
       } else {
-        this.setupMessage.textContent = 'Evolved library creatures keep their saved brain; other designs get a fresh exploratory brain for this run.';
+        this.setupMessage.textContent = 'Saved brains matching ' + selectedAction + ' are reused; creatures without one get a fresh exploratory brain.';
       }
     },
 

@@ -34,10 +34,24 @@
     show: function (params) {
       params = params || {};
       this.data = this.prepareData(params.data);
+      if (params.designId !== undefined) {
+        this.libraryCreatureId = params.designId || null;
+      } else if (this.data.LibraryCreatureId) {
+        this.libraryCreatureId = this.data.LibraryCreatureId;
+      } else {
+        // Only infer from the current editor design for a fresh launch. An old
+        // imported run without an id must never overwrite an unrelated library entry.
+        this.libraryCreatureId = !params.data && App ? App.currentDesignId || null : null;
+      }
+      this.data.LibraryCreatureId = this.libraryCreatureId;
       this.settings = this.data.Settings;
       this.networkSettings = this.data.NetworkSettings;
 
       this.autoplay = params.autoplay === undefined ? true : !!params.autoplay;
+      this.skipRecap = params.skipRecap === undefined
+        ? !!(Settings && Settings.SkipGenerationRecap)
+        : !!params.skipRecap;
+      this.showFlightDebug = false;
       this.speed = 1;
       this.watchingIndex = 0;
       this.showAllCreatures = true;
@@ -90,6 +104,7 @@
       this.data = null;
       this.recording = null;
       this.evolvedChromosome = null;
+      this.libraryCreatureId = null;
       this.playback = null;
       this.ghost = null;
       this.playbackScene = null;
@@ -111,6 +126,7 @@
         'creatureLabel',
         'nextCreatureButton',
         'autoplayToggle',
+        'skipRecapToggle',
         'durationSlider',
         'durationValue',
         'pauseButton',
@@ -130,6 +146,8 @@
         'settingsDrawer',
         'simulationSettingsPanel',
         'settingsButton',
+        'flightDebugToggle',
+        'flightDebugPanel',
       ].forEach(function (property) {
         this[property] = null;
       }, this);
@@ -277,6 +295,16 @@
       autoplayRow.appendChild(this.autoplayToggle);
       topLeft.appendChild(autoplayRow);
 
+      var recapRow = UI.el('div', 'hud-row');
+      recapRow.appendChild(UI.el('span', 'hud-row-label', 'SKIP RECAP'));
+      this.skipRecapToggle = UI.el('button', 'hud-toggle', 'OFF');
+      this.skipRecapToggle.title = 'Skip the generation playback recap';
+      this.skipRecapToggle.addEventListener('click', function () {
+        self.setSkipRecap(!self.skipRecap);
+      });
+      recapRow.appendChild(this.skipRecapToggle);
+      topLeft.appendChild(recapRow);
+
       var durationRow = UI.el('div', 'hud-row');
       durationRow.appendChild(UI.el('span', 'hud-row-label', 'DURATION'));
       this.durationSlider = UI.el('input', 'hud-slider');
@@ -306,6 +334,14 @@
       /* --- Top right: simulation controls + thumbnail + buttons --- */
       var topRight = UI.el('div', 'hud hud-top-right');
       var topControls = UI.el('div', 'hud-top-controls');
+      this.flightDebugToggle = UI.el('button', 'evo-button small flight-debug-toggle', 'Wing Debug');
+      this.flightDebugToggle.title = 'Show wing speed, aerodynamic forces and flight diagnostics';
+      this.flightDebugToggle.addEventListener('click', function () {
+        self.showFlightDebug = !self.showFlightDebug;
+        self.refreshHud();
+      });
+      topControls.appendChild(this.flightDebugToggle);
+
       this.pauseButton = UI.el('button', 'evo-button small simulation-pause-button', 'Pause');
       this.pauseButton.type = 'button';
       this.pauseButton.title = 'Pause the simulation';
@@ -330,6 +366,9 @@
       this.thumbnailCaption = UI.el('div', 'thumbnail-caption', 'NO DATA');
       frame.appendChild(this.thumbnailCaption);
       topRight.appendChild(frame);
+
+      this.flightDebugPanel = UI.el('pre', 'flight-debug hidden');
+      topRight.appendChild(this.flightDebugPanel);
 
       topRight.appendChild(
         Widgets.buttonRow(
@@ -416,10 +455,10 @@
       this.recordingLabel = UI.el('span', 'hud-recording-label', '');
       this.playbackBar.appendChild(this.recordingLabel);
 
-      this.saveCreatureButton = UI.el('button', 'hud-button primary', 'SAVE CREATURE');
-      this.saveCreatureButton.title = 'Save this evolved creature and its brain to My Creatures';
+      this.saveCreatureButton = UI.el('button', 'hud-button primary', 'SAVE BRAIN');
+      this.saveCreatureButton.title = 'Overwrite this action brain on the existing My Creatures entry and update its best-generation replay';
       this.saveCreatureButton.addEventListener('click', function () {
-        self.saveEvolvedCreature();
+        self.saveCreatureBrain();
       });
       this.playbackBar.appendChild(this.saveCreatureButton);
 
@@ -473,6 +512,17 @@
 
     exitSimulation: function () {
       App.show('home');
+    },
+
+    setSkipRecap: function (skip) {
+      this.skipRecap = !!skip;
+      if (Settings) Settings.SkipGenerationRecap = this.skipRecap;
+      // Turning the option on during a recap skips the current recap too.
+      if (this.skipRecap && this.state === 'playback') {
+        this.continueToNextGeneration();
+      } else {
+        this.refreshHud();
+      }
     },
 
     setSettingsVisible: function (visible) {
@@ -577,6 +627,15 @@
         this.refreshHud();
         return;
       }
+      if (this.pendingAutosaveGeneration !== null && this.pendingAutosaveGeneration !== undefined) {
+        this.flushPendingAutosave();
+        // In skip-recap mode the engine has already prepared the next
+        // population, so release the completed generation immediately.
+        if (this.evolution) {
+          this.evolution.playbackPending = false;
+          this.evolution.completedSolutions = null;
+        }
+      }
       this.syncCameraControlPoints();
       this.state = 'simulating';
       this.playback = null;
@@ -599,25 +658,48 @@
     },
 
     onGenerationEnd: function (payload) {
-      this.awaitingPlayback = true;
       this.pendingAutosaveGeneration = payload.generation;
       this.playbackGeneration = payload.generation;
+      this.playbackObjective = this.evolution.Settings.Objective;
+      this.recording = payload.recording;
+      this.evolvedChromosome =
+        payload.best && payload.best.chromosome ? payload.best.chromosome : null;
+      this.bestStats = payload.best ? payload.best.stats : null;
+      this.ghost = payload.recording ? new EVO.PlaybackCreature(payload.recording) : null;
+      this.ghostTime = 0;
+
+      var generation = payload.generation;
+      this.thumbnailCaption.textContent = 'GENERATION ' + generation;
+      this.recordingLabel.textContent =
+        'GEN ' + generation + (this.bestStats ? ' · ' + percent(this.bestStats.fitness) : '');
+
+      if (this.skipRecap) {
+        // Keep the champion as the next generation's comparison ghost, but
+        // don't pause evolution or enter the recap/playback state.
+        this.awaitingPlayback = false;
+        this.state = 'simulating';
+        this.playbackScene = null;
+        this.playbackTarget = null;
+        this.playback = null;
+        this.playbackPlaying = false;
+        this.playbackFinished = false;
+        this.playbackTime = 0;
+        this.playbackDuration = 0;
+        this.waitTimer = 0;
+        this.refreshHud();
+        this.refreshStats();
+        return;
+      }
+
+      this.awaitingPlayback = true;
       // Rebuild a clean render scene from the completed generation's descriptor.
       // The live scene may contain obstacles at their end-of-batch positions.
       this.playbackScene = new EVO.Scene(new EVO.PhysicsWorld(), this.evolution.SceneDescription);
-      this.playbackObjective = this.evolution.Settings.Objective;
       this.evolution.pause();
       this.state = 'playback';
       this.playbackFinished = false;
-      this.recording = payload.recording;
-      this.evolvedChromosome =
-        payload.best && payload.best.chromosome ? payload.best.chromosome.slice() : null;
-      this.bestStats = payload.best ? payload.best.stats : null;
 
       if (payload.recording) {
-        // The previous ghost becomes the currently playing creature.
-        this.ghost = new EVO.PlaybackCreature(payload.recording);
-        this.ghostTime = 0;
         this.playback = new EVO.PlaybackCreature(payload.recording);
         this.playback.seek(0);
         this.playbackDuration = Math.max(0.1, this.playback.getDuration());
@@ -632,10 +714,6 @@
         this.playbackDuration = 0;
       }
 
-      var generation = payload.generation;
-      this.thumbnailCaption.textContent = 'GENERATION ' + generation;
-      this.recordingLabel.textContent =
-        'GEN ' + generation + (this.bestStats ? ' · ' + percent(this.bestStats.fitness) : '');
       this.refreshHud();
       this.refreshStats();
 
@@ -763,6 +841,7 @@
         }
       }
 
+      this.updateFlightDiagnostics();
       this.refreshTimeLabels();
     },
 
@@ -819,16 +898,6 @@
         Renderer.drawDistanceMarkers(ctx, scene, this.camera);
       }
 
-      // Ghost of the previous generation's best creature
-      if (this.state === 'simulating' && this.ghost && this.ghost.getDuration() > 0) {
-        this.ghost.seek(this.ghostTime % Math.max(0.001, this.ghost.getDuration()));
-        Renderer.drawPlaybackCreature(ctx, this.ghost, this.camera, {
-          opacity: Settings.HiddenCreatureOpacity,
-          showMuscles: Settings.ShowMuscles,
-          showContraction: Settings.ShowMuscleContraction,
-        });
-      }
-
       // Creatures
       if (this.state === 'playback' && this.playback) {
         Renderer.drawPlaybackCreature(ctx, this.playback, this.camera, {
@@ -837,21 +906,61 @@
           showContraction: Settings.ShowMuscleContraction,
         });
       } else {
-        var batch = this.evolution.currentCreatureBatch;
-        for (var i = 0; i < batch.length; i++) {
-          var watched = i === this.watchingIndex;
-          var opacity = this.showAllCreatures || watched ? 1 : Settings.HiddenCreatureOpacity;
-          Renderer.drawCreature(ctx, batch[i], this.camera, {
-            opacity: opacity,
-            showMuscles: Settings.ShowMuscles,
-            showContraction: Settings.ShowMuscleContraction,
-          });
-        }
+        this.drawCreaturePopulation(ctx);
       }
 
       this.frameCount++;
       if (this.frameCount % 4 === 0) {
         this.drawThumbnail();
+      }
+    },
+
+    drawCreaturePopulation: function (ctx) {
+      var hasPreviousBest =
+        this.state === 'simulating' && this.ghost && this.ghost.getDuration() > 0;
+      var focusPreviousBest = !this.showAllCreatures && hasPreviousBest;
+      var batch = this.evolution.currentCreatureBatch || [];
+      var ghostOpacity = Settings.HiddenCreatureOpacity;
+
+      if (hasPreviousBest && !focusPreviousBest) {
+        this.ghost.seek(this.ghostTime % Math.max(0.001, this.ghost.getDuration()));
+        Renderer.drawPlaybackCreature(ctx, this.ghost, this.camera, {
+          opacity: ghostOpacity,
+          showMuscles: Settings.ShowMuscles,
+          showContraction: Settings.ShowMuscleContraction,
+        });
+      }
+
+      for (var i = 0; i < batch.length; i++) {
+        var watched = i === this.watchingIndex;
+        var opacity;
+        if (this.showAllCreatures) {
+          opacity = 1;
+        } else if (focusPreviousBest) {
+          // Fade the evaluated population so the former generation's champion
+          // can be inspected without the silhouettes blending together.
+          opacity = ghostOpacity;
+        } else {
+          opacity = watched ? 1 : ghostOpacity;
+        }
+        Renderer.drawCreature(ctx, batch[i], this.camera, {
+          opacity: opacity,
+          showMuscles: Settings.ShowMuscles,
+          showContraction: Settings.ShowMuscleContraction,
+          showWingDebug: this.showFlightDebug && watched,
+        });
+      }
+
+      if (focusPreviousBest) {
+        this.ghost.seek(this.ghostTime % Math.max(0.001, this.ghost.getDuration()));
+        // Draw last at full opacity: Visibility now brings the previous
+        // generation's best creature to the foreground.
+        Renderer.drawPlaybackCreature(ctx, this.ghost, this.camera, {
+          opacity: 1,
+          highlight: true,
+          showMuscles: Settings.ShowMuscles,
+          showContraction: Settings.ShowMuscleContraction,
+        });
       }
     },
 
@@ -938,6 +1047,23 @@
             ? this.evolution.Settings.Objective
             : this.settings.Objective;
       this.taskLabel.textContent = objectiveName(activeObjective);
+      var isFlyingTask = !!EVO.Objective && activeObjective === EVO.Objective.Flying;
+      if (this.flightDebugToggle) {
+        this.flightDebugToggle.classList.toggle('hidden', !isFlyingTask);
+        this.flightDebugToggle.classList.toggle('active', !!this.showFlightDebug);
+        this.flightDebugToggle.textContent = this.showFlightDebug ? 'Wing Debug: On' : 'Wing Debug';
+        this.flightDebugToggle.setAttribute(
+          'aria-pressed',
+          this.showFlightDebug ? 'true' : 'false'
+        );
+      }
+      if (this.flightDebugPanel) {
+        this.flightDebugPanel.classList.toggle(
+          'hidden',
+          !isFlyingTask || !this.showFlightDebug || this.state !== 'simulating'
+        );
+        this.updateFlightDiagnostics();
+      }
 
       var fitness = this.currentFitness();
       this.fitnessLabel.textContent = 'FITNESS: ' + percent(fitness);
@@ -960,7 +1086,11 @@
       this.seekLabel.classList.toggle('hidden', !hasRecording);
       this.saveCreatureButton.classList.toggle('hidden', !hasRecording);
       this.saveRecordingButton.classList.toggle('hidden', !hasRecording);
-      this.saveCreatureButton.disabled = !this.evolvedChromosome || !this.evolvedChromosome.length;
+      this.saveCreatureButton.disabled =
+        !this.libraryCreatureId || !this.recording || !this.evolvedChromosome || !this.evolvedChromosome.length;
+      this.saveCreatureButton.title = !this.libraryCreatureId
+        ? 'Start this simulation from a saved My Creatures entry to overwrite its brain'
+        : 'Overwrite this action brain and update its best-generation replay';
       if (hasRecording) {
         this.playButton.textContent = this.playbackPlaying ? '\u2016' : '\u25B6';
         this.seekSlider.value = String(
@@ -984,6 +1114,11 @@
 
       this.autoplayToggle.textContent = this.autoplay ? 'ON' : 'OFF';
       this.autoplayToggle.classList.toggle('active', this.autoplay);
+      if (this.skipRecapToggle) {
+        this.skipRecapToggle.textContent = this.skipRecap ? 'ON' : 'OFF';
+        this.skipRecapToggle.classList.toggle('active', this.skipRecap);
+        this.skipRecapToggle.setAttribute('aria-pressed', this.skipRecap ? 'true' : 'false');
+      }
       this.durationSlider.value = String(this.settings.SimulationTime);
       this.durationValue.textContent = this.settings.SimulationTime + 'S';
       var activeDuration = this.evolution && this.evolution.Settings
@@ -1023,6 +1158,64 @@
     formatTime: function (time) {
       if (!isFinite(time)) time = 0;
       return time.toFixed(1) + 's';
+    },
+
+    updateFlightDiagnostics: function () {
+      if (!this.flightDebugPanel || !this.showFlightDebug) return;
+      var creature =
+        this.state === 'simulating' && this.evolution
+          ? this.evolution.getWatchingCreature(this.watchingIndex)
+          : null;
+      if (!creature) {
+        this.flightDebugPanel.textContent = 'Live wing diagnostics appear while a generation is simulating.';
+        return;
+      }
+
+      var wings = (creature.bones || []).filter(function (bone) { return bone.isWing; });
+      if (!wings.length) {
+        this.flightDebugPanel.textContent = 'No wing bones are marked on this creature.';
+        return;
+      }
+
+      var lines = ['WING FLIGHT DIAGNOSTICS'];
+      var totalUpwardLift = 0;
+      var totalUpwardWingForce = 0;
+      wings.forEach(function (bone, index) {
+        var debug = bone.wingDebug || {};
+        var angle = (debug.angleOfAttack || 0) * Utils.Rad2Deg;
+        totalUpwardLift += Math.max(0, debug.liftY || 0);
+        totalUpwardWingForce += debug.forceY || 0;
+        lines.push(
+          'Wing ' + (index + 1) + ': ' + (debug.speed || 0).toFixed(2) + ' u/s · AoA ' +
+            angle.toFixed(0) + '° · lift ' + (debug.lift || 0).toFixed(0) + ' · drag ' +
+            (debug.drag || 0).toFixed(0)
+        );
+      });
+
+      var mass = 0;
+      (creature.joints || []).forEach(function (joint) {
+        mass += joint.data ? joint.data.weight : joint.body && joint.body.mass || 0;
+      });
+      (creature.bones || []).forEach(function (bone) {
+        mass += bone.data ? bone.data.weight : bone.mass || 0;
+      });
+      var gravity = this.evolution.scene && this.evolution.scene.world
+        ? Math.abs(this.evolution.scene.world.gravity)
+        : 50;
+      var tracker = creature.objectiveTracker || {};
+      var groundContacts = creature.getNumberOfPointsTouchingGround
+        ? creature.getNumberOfPointsTouchingGround()
+        : 0;
+      lines.push(
+        'Upward lift: ' + totalUpwardLift.toFixed(0) + ' · net upward wing force: ' +
+          totalUpwardWingForce.toFixed(0) + ' / estimated weight: ' + (mass * gravity).toFixed(0)
+      );
+      lines.push(
+        'Ground contacts: ' + groundContacts + ' · airborne: ' +
+          (tracker.currentAirborneTime || 0).toFixed(2) + 's · total: ' +
+          (tracker.totalAirborneTime || 0).toFixed(2) + 's'
+      );
+      this.flightDebugPanel.textContent = lines.join('\n');
     },
 
     /** The fitness that is displayed: live best of the current generation. */
@@ -1065,44 +1258,70 @@
     showSaveMenu: function () {
       var self = this;
       var content = UI.el('div', 'menu-content');
-      content.appendChild(
-        Widgets.textInput({
-          label: 'Name',
-          value: this.data.CreatureDesign.name || 'Evolution',
-        }).element
-      );
-      var nameInput = content.lastChild.querySelector('input');
-
+      var suggestedName = this.data && this.data.CreatureDesign
+        ? this.data.CreatureDesign.name || 'Evolution'
+        : 'Evolution';
+      if (this.recording && this.recording.generation) {
+        suggestedName += ' · Gen ' + this.recording.generation;
+      }
+      var nameField = Widgets.textInput({
+        label: 'Replay / run name',
+        value: suggestedName,
+        maxLength: 60,
+      });
+      content.appendChild(nameField.element);
+      var creatureSnapshot = this.getEvolvedCreatureSnapshot();
       content.appendChild(
         UI.el(
           'p',
           'panel-note',
-          'Save the fully evolved state (chromosomes, best creatures and settings) so that ' +
-            'you can continue the evolution later.'
+          'Save a replay or run checkpoint, or overwrite this creature’s brain for the current action. Saving the brain also replaces that action’s best-generation replay in the Gallery. Brain saving requires a simulation launched from a saved My Creatures entry.'
         )
       );
 
       Modal.open({
-        title: 'Save evolution checkpoint',
+        title: 'Save run',
         content: content,
         actions: [
           { label: 'Cancel' },
           {
-            label: 'Save in this browser',
+            label: 'Save replay',
+            disabled: !this.recording,
             onClick: function () {
-              Storage.saveSimulation(nameInput.value || 'Evolution', self.data);
-              Modal.alert('The simulation was saved in this browser.', 'Saved');
+              self.saveRecording(nameField.input.value);
             },
           },
           {
-            label: 'Download file',
+            label: 'Save run',
+            onClick: function () {
+              self.saveRun(nameField.input.value);
+            },
+          },
+          {
+            label: 'Save creature brain',
+            disabled: !creatureSnapshot || !this.libraryCreatureId,
+            onClick: function () {
+              self.saveCreatureBrain(creatureSnapshot);
+            },
+          },
+          {
+            label: 'Download run',
             primary: true,
             onClick: function () {
-              self.exportFile(nameInput.value || 'Evolution');
+              self.exportFile(nameField.input.value || 'Evolution');
             },
           },
         ],
       });
+    },
+
+    saveRun: function (name) {
+      try {
+        Storage.saveSimulation(name || 'Evolution', this.data);
+        Modal.alert('The simulation run was saved in this browser.', 'Run saved');
+      } catch (error) {
+        Modal.alert('The run could not be saved: ' + error.message, 'Save failed');
+      }
     },
 
     exportFile: function (name) {
@@ -1208,28 +1427,61 @@
       reader.readAsText(file);
     },
 
-    saveEvolvedCreature: function () {
-      if (!this.recording || !this.evolvedChromosome || !this.evolvedChromosome.length) return;
+    getEvolvedCreatureSnapshot: function () {
+      if (
+        !this.recording ||
+        !this.recording.movementData ||
+        !this.evolvedChromosome ||
+        !this.evolvedChromosome.length
+      ) {
+        return null;
+      }
+      return {
+        recording: this.recording,
+        chromosome: this.evolvedChromosome,
+        networkSettings: this.recording.networkSettings ||
+          (this.evolution && this.evolution.NetworkSettings),
+      };
+    },
+
+    saveCreatureBrain: function (snapshot) {
+      snapshot = snapshot || this.getEvolvedCreatureSnapshot();
+      if (!this.libraryCreatureId) {
+        Modal.alert(
+          'This simulation is not linked to a saved creature. Save the design in My Creatures first, then train its action brain.',
+          'Saved creature required'
+        );
+        return;
+      }
+      if (!snapshot) {
+        Modal.alert('Wait for a generation replay before saving its best brain.', 'Brain unavailable');
+        return;
+      }
       try {
-        Storage.saveEvolvedCreature(
-          this.recording,
-          this.evolvedChromosome,
-          this.recording.networkSettings,
+        Storage.saveEvolvedBrain(
+          this.libraryCreatureId,
+          snapshot.recording,
+          snapshot.chromosome,
+          snapshot.networkSettings,
           this.data ? this.data.LastV2SimulatedGeneration : 0
         );
         Modal.alert(
-          'The evolved creature and its ' + objectiveName(this.recording.task) + ' brain were saved to My Creatures.',
-          'Creature saved'
+          'Overwrote the ' + objectiveName(snapshot.recording.task) +
+            ' brain on this creature and updated its best-generation replay in the Gallery.',
+          'Brain updated'
         );
       } catch (error) {
-        Modal.alert('The creature could not be saved: ' + error.message, 'Save failed');
+        Modal.alert('The creature brain could not be updated: ' + error.message, 'Save failed');
       }
     },
 
-    saveRecording: function () {
-      if (!this.recording) return;
+    saveRecording: function (customName) {
+      if (!this.recording) {
+        Modal.alert('There is no generation replay available to save yet.', 'Replay unavailable');
+        return;
+      }
       try {
-        Storage.saveRecording(this.recording);
+        Storage.saveRecording(this.recording, customName);
         Modal.alert(
           'The recording of generation ' + this.recording.generation + ' was added to the gallery.',
           'Saved'
