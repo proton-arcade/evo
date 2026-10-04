@@ -36,6 +36,7 @@ package manager and no network access required.
 | **Select** | Tap a component to edit it; drag joints/bones to move them; drag empty space to pan. |
 | **Joint** | Tap to place a joint (joints cannot overlap). |
 | **Bone** | Tap a joint, then a second joint, to connect them with a bone. |
+| **Wing** | Tap a bone to mark it as a wing; tap the same winged bone again to remove it. |
 | **Muscle** | Tap a bone, then a second bone, to add a muscle between them. |
 | **Decor** | Pick a cosmetic decoration (eyes, mouths, noses, hands, shoes, …) and tap a bone to attach it. |
 | **Erase** | Tap a component to delete it (deleting a joint deletes its bones and muscles). |
@@ -45,8 +46,8 @@ muscle id, decoration scale/rotation/flip/order) are edited in the right-hand pa
 highlighted in teal. Muscles that share a
 **muscle id** are contracted and expanded together by a single network output.
 
-Keyboard: `V` select, `J` joint, `B` bone, `M` muscle, `D` decoration, `E` erase, `Ctrl/Cmd+Z`
-undo, `Ctrl/Cmd+Shift+Z` redo, `Delete` removes the selection, `Esc` cancels a pending placement.
+Keyboard: `V` select, `J` joint, `B` bone, `W` wing, `M` muscle, `D` decoration, `E` erase,
+`Ctrl/Cmd+Z` undo, `Ctrl/Cmd+Shift+Z` redo, `Delete` removes the selection, `Esc` cancels a pending placement.
 
 On touch screens, tap to use the active tool, drag a selected joint/bone or empty space with one
 finger, and use two fingers to pan and zoom the editor view. A touch edit is applied when the finger

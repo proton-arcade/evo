@@ -24,6 +24,7 @@ editor.render = function () {};
 [
   EVO.EditorTools.JOINT,
   EVO.EditorTools.BONE,
+  EVO.EditorTools.WING,
   EVO.EditorTools.MUSCLE,
   EVO.EditorTools.DECORATION,
   EVO.EditorTools.ERASE,

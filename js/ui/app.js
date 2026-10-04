@@ -1080,7 +1080,7 @@
           body:
             'Place joints with the joint tool, connect them with bones and add muscles between two bones. ' +
             'Muscles contract or expand depending on the output of the creature\'s brain. ' +
-            'Use the settings panel to change weights and muscle strengths, mark wing bones, adjust their chord, and invert their powered stroke.',
+            'Use the Wing tool, or press W, then tap a bone to mark it as a wing; tap it again to remove the wing. Use the settings panel to change weights and muscle strengths, adjust wing chord, and invert the powered stroke.',
         },
         {
           title: 'How the evolution works',
