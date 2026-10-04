@@ -150,6 +150,8 @@
     this.staticCircles = [];
     this.forceCallbacks = [];
     this.time = 0;
+    // Optional cross-creature contacts are used by the shared ecosystem world.
+    this.interCreatureCollisions = false;
     // Velocity damping (loss) per second; a very small value keeps the
     // simulation from gaining energy.
     this.linearDamping = 0.0;
@@ -406,6 +408,7 @@
     // --- 3. Solve constraints ---------------------------------------
     for (var iteration = 0; iteration < iterations; iteration++) {
       this.solveConstraints();
+      if (this.interCreatureCollisions) this.solveInterCreatureCollisions(dt);
       this.solveCollisions(iteration === iterations - 1);
     }
 
@@ -450,6 +453,63 @@
       if (!b.fixed) {
         b.x -= dx * correction * b.invMass;
         b.y -= dy * correction * b.invMass;
+      }
+    }
+  };
+
+  /** Resolves circle contacts between different creatures in an ecosystem. */
+  PhysicsWorld.prototype.solveInterCreatureCollisions = function (dt) {
+    var bodies = this.bodies;
+    for (var i = 0; i < bodies.length; i++) {
+      var a = bodies[i];
+      if (!a.collides || !a.owner || a.fixed) continue;
+      for (var j = i + 1; j < bodies.length; j++) {
+        var b = bodies[j];
+        if (!b.collides || !b.owner || b.fixed || a.owner === b.owner) continue;
+
+        var invMassA = a.fixed ? 0 : a.invMass;
+        var invMassB = b.fixed ? 0 : b.invMass;
+        var totalInvMass = invMassA + invMassB;
+        if (totalInvMass <= 0) continue;
+
+        var dx = b.x - a.x;
+        var dy = b.y - a.y;
+        var minDistance = a.radius + b.radius;
+        var distanceSq = dx * dx + dy * dy;
+        if (distanceSq >= minDistance * minDistance) continue;
+
+        var distance = Math.sqrt(distanceSq);
+        var nx = distance > 1e-9 ? dx / distance : 1;
+        var ny = distance > 1e-9 ? dy / distance : 0;
+        var correction = (minDistance - distance) / totalInvMass;
+        var correctionAX = nx * correction * invMassA;
+        var correctionAY = ny * correction * invMassA;
+        var correctionBX = nx * correction * invMassB;
+        var correctionBY = ny * correction * invMassB;
+        a.x -= correctionAX;
+        a.y -= correctionAY;
+        a._prevX -= correctionAX;
+        a._prevY -= correctionAY;
+        b.x += correctionBX;
+        b.y += correctionBY;
+        b._prevX += correctionBX;
+        b._prevY += correctionBY;
+
+        // Positional depenetration must not create artificial velocity. Also
+        // remove the approaching component so two creatures cannot push
+        // straight through one another at the next substep.
+        if (dt > 0) {
+          var relativeVelocityX = (b.x - b._prevX - (a.x - a._prevX)) / dt;
+          var relativeVelocityY = (b.y - b._prevY - (a.y - a._prevY)) / dt;
+          var approachingVelocity = relativeVelocityX * nx + relativeVelocityY * ny;
+          if (approachingVelocity < 0) {
+            var impulse = -approachingVelocity / totalInvMass;
+            a._prevX += impulse * invMassA * nx * dt;
+            a._prevY += impulse * invMassA * ny * dt;
+            b._prevX -= impulse * invMassB * nx * dt;
+            b._prevY -= impulse * invMassB * ny * dt;
+          }
+        }
       }
     }
   };
@@ -603,10 +663,12 @@
     if (tangentLength < 1e-12) return;
 
     var friction = body.contactFriction === undefined ? 1.0 : body.contactFriction;
-    var maxTangent = friction * body.normalCorrection * 1.5;
-    if (tangentLength <= maxTangent) return;
-
-    var scale = maxTangent / tangentLength;
+    var maxTangent = Math.max(0, friction) * body.normalCorrection * 1.5;
+    // Static friction cancels low-speed slip entirely; kinetic friction removes
+    // at most the available tangential correction. Leaving the low-speed
+    // displacement untouched creates a terminal slide that never comes to rest.
+    var remainingTangent = Math.max(0, tangentLength - maxTangent);
+    var scale = remainingTangent / tangentLength;
     var newTangentX = tangentX * scale;
     var newTangentY = tangentY * scale;
 

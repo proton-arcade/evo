@@ -22,7 +22,7 @@
       design.muscles.length
     );
 
-    this.jointIndexById = {};
+    this.jointIndexById = Object.create(null);
     var self = this;
     design.joints.forEach(function (joint, index) {
       self.jointIndexById[joint.id] = index;
@@ -46,7 +46,7 @@
       };
     });
 
-    this.boneById = {};
+    this.boneById = Object.create(null);
     this.bones.forEach(function (bone) {
       self.boneById[bone.data.id] = bone;
     });

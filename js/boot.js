@@ -45,7 +45,7 @@
       'Start with one of the sample creatures in the editor, or place joints with the joint tool and connect them with bones.',
       'Add muscles between two bones. Each muscle contracts or expands depending on the output of the creature\'s brain.',
       'Choose a task in the simulation (running, jumping, obstacle jumping, climbing or flying), press play and watch the population evolve.',
-      'The best creature of every generation is recorded — you can watch it again in the gallery or save its design.',
+      'The best creature of every generation is recorded. Save its evolved brain to My Creatures, or save its movement replay to the Gallery.'
     ];
     paragraphs.forEach(function (text) {
       content.appendChild(UI.el('p', 'modal-message', text));

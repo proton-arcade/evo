@@ -84,6 +84,19 @@
         App.setDesign(this.builder.design);
       }
       this.detachEvents();
+      if (this.history) this.history.reset();
+      this.history = null;
+      this.builder = null;
+      this.design = null;
+      this.selection = null;
+      this.pending = null;
+      this.canvas = null;
+      this.canvasContainer = null;
+      this.nameInput = null;
+      this.settingsPanel = null;
+      this.hint = null;
+      this.toolButtons = null;
+      this.decorationPicker = null;
     },
 
     resize: function () {
@@ -142,6 +155,7 @@
           self.builder.design.name = value;
         },
       });
+      this.nameInput = nameWidget.input;
       nameWidget.element.classList.add('editor-name');
       bar.appendChild(nameWidget.element);
 
@@ -164,13 +178,7 @@
               label: 'New',
               onClick: function () {
                 Modal.confirm('Start a new creature?', function () {
-                  self.builder = new EVO.CreatureBuilder(EVO.CreatureDesign.empty());
-                  self.history.reset();
-                  self.history.push(self.builder.design);
-                  self.selection = null;
-                  self.pending = null;
-                  self.refreshSettings();
-                  self.render();
+                  self.startNewCreature();
                 }, 'Start new');
               },
             },
@@ -213,6 +221,29 @@
       );
 
       return bar;
+    },
+
+    installDesign: function (design, designId) {
+      this.builder = new EVO.CreatureBuilder(design);
+      if (this.builder.design.name === 'Unnamed') this.builder.design.name = '';
+      this.designId = designId || null;
+      this.history.reset();
+      this.history.push(this.builder.design);
+      this.selection = null;
+      this.pending = null;
+      this.drag = null;
+      this.deferredTap = null;
+      this.activePointerId = null;
+      this.isPointerDown = false;
+      if (this.nameInput) this.nameInput.value = this.builder.design.name || '';
+      App.setDesign(this.builder.design);
+      this.frameDesign();
+      this.refreshSettings();
+      this.render();
+    },
+
+    startNewCreature: function () {
+      this.installDesign(EVO.CreatureDesign.empty(), null);
     },
 
     buildToolbar: function () {
@@ -521,7 +552,7 @@
 
       if (this.tool === Tools.JOINT) {
         this.changeAndRecord(function (builder) {
-          builder.tryPlacingJoint(snapped);
+          return builder.tryPlacingJoint(snapped);
         });
         return;
       }
@@ -611,7 +642,7 @@
         // Record the state before and after the drag so that it can be undone.
         var current = this.snapshot();
         if (JSON.stringify(this.drag.original) !== JSON.stringify(current)) {
-          var historyEntry = JSON.stringify(EVO.CreatureDesign.decode(this.history.entries[this.history.index]));
+          var historyEntry = JSON.stringify(this.history.entries[this.history.index]);
           if (historyEntry !== JSON.stringify(this.drag.original)) {
             this.history.entries = this.history.entries.slice(0, this.history.index + 1);
             this.history.entries.push(JSON.parse(JSON.stringify(this.drag.original)));
@@ -884,6 +915,7 @@
         return;
       }
       design.name = design.name || 'Unnamed';
+      if (this.nameInput) this.nameInput.value = design.name;
       this.designId = Storage.saveDesign(design, this.designId);
       App.setDesign(design);
       Modal.alert('"' + design.name + '" was saved.', 'Saved');
@@ -921,15 +953,8 @@
               try {
                 var design = EVO.CreatureDesign.decode(JSON.parse(textarea.value));
                 if (!design.joints.length) throw new Error('The design contains no joints.');
-                self.builder = new EVO.CreatureBuilder(design);
-                self.history.reset();
-                self.history.push(self.builder.design);
-                self.selection = null;
-                self.pending = null;
                 Modal.close();
-                self.frameDesign();
-                self.refreshSettings();
-                self.render();
+                self.installDesign(design, null);
               } catch (error) {
                 Modal.alert('Could not read that design: ' + error.message, 'Import failed');
               }
@@ -959,14 +984,7 @@
         );
         button.addEventListener('click', function () {
           Modal.close();
-          self.changeAndRecord(function () {
-            self.builder = new EVO.CreatureBuilder(EVO.CreatureDesign.clone(sample.design));
-            return true;
-          });
-          self.selection = null;
-          self.frameDesign();
-          self.refreshSettings();
-          self.render();
+          self.installDesign(sample.design, null);
         });
         content.appendChild(button);
       });
@@ -979,14 +997,7 @@
           button.appendChild(UI.el('span', 'sample-name', entry.name));
           button.addEventListener('click', function () {
             Modal.close();
-            self.builder = new EVO.CreatureBuilder(EVO.CreatureDesign.clone(entry.design));
-            self.designId = entry.id;
-            self.history.reset();
-            self.history.push(self.builder.design);
-            self.selection = null;
-            self.frameDesign();
-            self.refreshSettings();
-            self.render();
+            self.installDesign(entry.design, entry.id);
           });
           content.appendChild(button);
         });
@@ -1340,7 +1351,7 @@
           hint = 'Tap to place a joint. Joints cannot be placed too close to each other.';
           break;
         case Tools.BONE:
-          hint = 'Tap one joint and then another to connect them with a bone (or drag from one to the other).';
+          hint = 'Tap one joint and then another to connect them with a bone.';
           break;
         case Tools.MUSCLE:
           hint = 'Tap one bone and then another to connect them with a muscle.';
@@ -1363,7 +1374,7 @@
     /* --- rendering ---------------------------------------------------- */
     buildRenderModel: function () {
       var design = this.builder.design;
-      var jointById = {};
+      var jointById = Object.create(null);
       var joints = design.joints.map(function (data) {
         var joint = {
           data: data,
@@ -1373,7 +1384,7 @@
         return joint;
       });
 
-      var boneById = {};
+      var boneById = Object.create(null);
       var bones = design.bones.map(function (data) {
         var bone = {
           data: data,
@@ -1451,8 +1462,8 @@
       }
 
       var model = this.buildRenderModel();
-      var selectedJoints = {};
-      var selectedBones = {};
+      var selectedJoints = Object.create(null);
+      var selectedBones = Object.create(null);
       if (this.selection) {
         if (this.selection.type === 'joint') selectedJoints[this.selection.id] = true;
         if (this.selection.type === 'bone') selectedBones[this.selection.id] = true;

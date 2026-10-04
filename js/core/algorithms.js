@@ -121,7 +121,7 @@
       var length = chromosome.length;
       if (length === 0) return chromosome;
 
-      var start = Utils.randomInt(0, Math.max(1, length - 1));
+      var start = Utils.randomInt(0, length);
       var maxChunkLength = Utils.clamp(length - start, 1, 15);
       var chunkLength = Math.min(maxChunkLength, Utils.randomInt(2, 16));
 
@@ -150,8 +150,8 @@
       var length = chromosome.length;
       if (length < 2) return chromosome;
 
-      var start = Utils.randomInt(0, length - 1);
-      var end = Utils.randomInt(start, length - 1);
+      var start = Utils.randomInt(0, length);
+      var end = Utils.randomInt(start, length);
       var mid = Math.floor((start + end) / 2);
 
       for (var i = start; i <= mid; i++) {

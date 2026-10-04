@@ -313,6 +313,44 @@
       return entry.id;
     },
 
+    /** Saves one evolved phenotype as a creature entry, with its brain intact. */
+    saveEvolvedCreature: function (recording, chromosome, networkSettings, lastV2Generation) {
+      if (!recording || !recording.creatureDesign || !chromosome || !chromosome.length) {
+        throw new Error('There is no evolved creature to save yet.');
+      }
+      var design = EVO.CreatureDesign.clone(recording.creatureDesign);
+      var taskName = EVO.ObjectiveUtil.stringRepresentation(recording.task);
+      var suffix = ' - ' + taskName + ' Gen ' + recording.generation;
+      var baseName = design.name && design.name !== 'Unnamed' ? design.name : 'Creature';
+      design.name = baseName.substr(0, Math.max(1, 40 - suffix.length)) + suffix;
+      var designs = Store.getJSON('designs', []);
+      var entry = {
+        id: makeId(),
+        name: design.name,
+        design: EVO.CreatureDesign.encode(design),
+        date: new Date().toISOString(),
+        evolvedCreature: {
+          task: recording.task,
+          generation: recording.generation,
+          chromosome: chromosome.map(function (weight) {
+            return Utils.round4(weight);
+          }),
+          networkSettings: EVO.NeuralNetworkSettings.encode(
+            networkSettings || recording.networkSettings
+          ),
+          scene:
+            recording.sceneDescription && EVO.SimulationSceneDescription
+              ? EVO.SimulationSceneDescription.encode(recording.sceneDescription)
+              : null,
+          stats: recording.stats ? EVO.CreatureStats.encode(recording.stats) : null,
+          lastV2SimulatedGeneration: lastV2Generation || 0,
+        },
+      };
+      designs.unshift(entry);
+      Store.setJSON('designs', designs);
+      return entry.id;
+    },
+
     deleteDesign: function (id) {
       var designs = Store.getJSON('designs', []).filter(function (entry) {
         return entry.id !== id;
@@ -409,6 +447,15 @@
     },
 
     start: function () {
+      this.currentDesign = null;
+      var lastDesign = Settings.LastCreatureDesign;
+      if (lastDesign) {
+        try {
+          this.currentDesign = EVO.CreatureDesign.decode(lastDesign);
+        } catch (error) {
+          this.currentDesign = null;
+        }
+      }
       this.root = document.getElementById('screens');
       if (!this.root) {
         this.root = document.body;
@@ -434,6 +481,7 @@
           target.classList &&
           (target.classList.contains('editor-canvas') ||
             target.classList.contains('simulation-canvas') ||
+            target.classList.contains('ecosystem-canvas') ||
             target.classList.contains('gallery-canvas'))
         ) {
           event.preventDefault();
@@ -459,6 +507,7 @@
       if (this.current && this.current.element && this.current.element.parentNode) {
         this.current.element.parentNode.removeChild(this.current.element);
       }
+      if (this.current) this.current.element = null;
 
       this.currentName = name;
       this.current = screen;
@@ -493,7 +542,7 @@
       var actions = UI.el('div', 'home-actions');
       actions.appendChild(
         this.bigButton('Create a Creature', 'Design a creature from scratch', function () {
-          App.show('editor', { design: null });
+          App.show('editor', { design: EVO.CreatureDesign.empty() });
         })
       );
       actions.appendChild(
@@ -504,6 +553,11 @@
       actions.appendChild(
         this.bigButton('My Creatures', 'Load, edit or delete your saved designs', function () {
           App.show('creatures');
+        })
+      );
+      actions.appendChild(
+        this.bigButton('Ecosystem', 'Bring several creatures into one shared world', function () {
+          App.show('ecosystem');
         })
       );
       actions.appendChild(
@@ -607,7 +661,13 @@
               entry.design.bones.length +
               ' bones · ' +
               entry.design.muscles.length +
-              ' muscles'
+              ' muscles' +
+              (entry.evolvedCreature
+                ? ' · evolved ' +
+                  EVO.ObjectiveUtil.stringRepresentation(entry.evolvedCreature.task).toLowerCase() +
+                  ' · gen ' +
+                  entry.evolvedCreature.generation
+                : '')
           )
         );
         row.appendChild(main);
@@ -623,7 +683,25 @@
               label: 'Simulate',
               onClick: function () {
                 App.setDesign(entry.design);
-                App.show('simulation', {});
+                if (entry.evolvedCreature) {
+                  var profile = entry.evolvedCreature;
+                  var settings = EVO.SimulationSettings.forObjective(profile.task);
+                  var networkSettings = EVO.NeuralNetworkSettings.decode(profile.networkSettings);
+                  var scene = profile.scene
+                    ? EVO.SimulationSceneDescription.decode(profile.scene)
+                    : EVO.DefaultSimulationScenes.defaultSceneForObjective(profile.task);
+                  var data = EVO.SimulationData.create(
+                    settings,
+                    networkSettings,
+                    EVO.CreatureDesign.clone(entry.design),
+                    scene
+                  );
+                  data.CurrentChromosomes = [profile.chromosome.slice()];
+                  data.LastV2SimulatedGeneration = profile.lastV2SimulatedGeneration || 0;
+                  App.show('simulation', { data: data });
+                } else {
+                  App.show('simulation', {});
+                }
               },
             },
             {
@@ -784,10 +862,8 @@
       );
       content.appendChild(appearance);
 
-      var algorithms = Widgets.panel('Evolution');
       var simSettings = EVO.SimulationSettings.decode(Settings.SimulationSettings);
       var networkSettings = EVO.NeuralNetworkSettings.decode(Settings.NetworkSettings);
-      content.appendChild(algorithms);
       content.appendChild(
         SimulationSettingsPanel.create(simSettings, networkSettings, function (updated, networkUpdated) {
           Settings.SimulationSettings = EVO.SimulationSettings.encode(updated);
@@ -862,6 +938,8 @@
                   Store.setJSON('designs', []);
                   Store.setJSON('recordings', []);
                   Store.setJSON('simulations', []);
+                  Store.remove('LAST_CREATURE_DESIGN_KEY');
+                  App.currentDesign = null;
                 },
                 'Delete everything'
               );
@@ -933,7 +1011,7 @@
             'Drag with the left mouse button to pan, use the scroll wheel or a pinch gesture to zoom. ' +
             'On touch screens, drag with one finger to pan and use two fingers to pan and zoom. In the editor, ' +
             'drag from one joint to another to create a bone and from one bone to another to create a muscle. ' +
-            'The space bar pauses the simulation.',
+            'Use the Pause/Resume button or the space bar to pause and continue the simulation.',
         },
         {
           title: 'Gallery',
@@ -969,6 +1047,8 @@
       var notify = function () {
         onChange(settings, networkSettings);
       };
+      var batchSizeWidget = null;
+      settings.BatchSize = Math.min(settings.BatchSize, settings.PopulationSize);
 
       panel.add(
         Widgets.dropdown({
@@ -985,22 +1065,21 @@
         }).element
       );
 
-      panel.add(
-        Widgets.slider({
-          label: 'Simulation time',
-          min: 5,
-          max: 60,
-          step: 5,
-          value: settings.SimulationTime,
-          format: function (v) {
-            return v + 's';
-          },
-          onInput: function (value) {
-            settings.SimulationTime = value;
-            notify();
-          },
-        }).element
-      );
+      var simulationTimeWidget = Widgets.slider({
+        label: 'Simulation time',
+        min: 5,
+        max: 60,
+        step: 5,
+        value: settings.SimulationTime,
+        format: function (v) {
+          return v + 's';
+        },
+        onInput: function (value) {
+          settings.SimulationTime = value;
+          notify();
+        },
+      });
+      panel.add(simulationTimeWidget.element);
 
       panel.add(
         Widgets.slider({
@@ -1014,7 +1093,10 @@
           },
           onInput: function (value) {
             settings.PopulationSize = value;
-            if (settings.BatchSize > value) settings.BatchSize = value;
+            if (settings.BatchSize > value) {
+              settings.BatchSize = value;
+              if (batchSizeWidget) batchSizeWidget.set(value);
+            }
             notify();
           },
         }).element
@@ -1031,18 +1113,18 @@
         }).element
       );
 
-      panel.add(
-        Widgets.stepper({
-          label: 'Batch size',
-          min: 2,
-          max: 50,
-          value: settings.BatchSize,
-          onChange: function (value) {
-            settings.BatchSize = value;
-            notify();
-          },
-        }).element
-      );
+      batchSizeWidget = Widgets.stepper({
+        label: 'Batch size',
+        min: 2,
+        max: 50,
+        value: settings.BatchSize,
+        onChange: function (value) {
+          settings.BatchSize = Math.min(value, settings.PopulationSize);
+          batchSizeWidget.set(settings.BatchSize);
+          notify();
+        },
+      });
+      panel.add(batchSizeWidget.element);
 
       panel.add(
         Widgets.toggle({
@@ -1174,6 +1256,9 @@
       var container = UI.el('div', 'settings-panels');
       container.appendChild(panel);
       container.appendChild(networkPanel);
+      container.setSimulationTime = function (value) {
+        simulationTimeWidget.set(value);
+      };
       return container;
     },
   };

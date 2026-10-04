@@ -203,7 +203,9 @@
   function calculateUniqueMusclesContext(muscles) {
     var numberOfUniqueMuscleIds = 0;
     var muscleToOutputIndex = new Array(muscles.length);
-    var userIdToIndex = {};
+    // User-supplied muscle ids can be strings like "__proto__" or "constructor".
+    // A null-prototype map keeps those ids from colliding with Object.prototype.
+    var userIdToIndex = Object.create(null);
 
     for (var i = 0; i < muscles.length; i++) {
       var muscle = muscles[i];

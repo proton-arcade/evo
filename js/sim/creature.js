@@ -46,7 +46,7 @@
     this.initialPosition = { x: 0, y: 0 };
     this.maxJumpingHeight = 0;
     this.simulationTimeOverride = 0;
-    this.jointIdsWithPenalty = {};
+    this.jointIdsWithPenalty = Object.create(null);
     this.containsPenaltyJoints = false;
     this.recordingPlayer = null;
     this.recorder = null;
@@ -63,6 +63,7 @@
     this._buildJoints();
     this._buildBones();
     this._buildMuscles();
+    this._buildDecorations();
 
     this.initialPosition = { x: this.getXPosition(), y: this.getYPosition() };
   }
@@ -187,6 +188,24 @@
     });
   };
 
+  Creature.prototype._buildDecorations = function () {
+    var self = this;
+    this.design.decorations.forEach(function (data) {
+      var bone = self._findBone(data.boneId);
+      if (!bone) return;
+      self.decorations.push({
+        data: data,
+        bone: bone,
+        offset: data.offset,
+        scale: data.scale,
+        rotation: data.rotation,
+        flipX: data.flipX,
+        flipY: data.flipY,
+        decorationType: data.decorationType,
+      });
+    });
+  };
+
   Creature.prototype.updateBoneGeometry = function (bone) {
     var ax = bone.startJoint.body.x;
     var ay = bone.startJoint.body.y;
@@ -238,7 +257,7 @@
   Creature.prototype.prepareForEvolution = function () {
     this.alive = true;
     this.maxJumpingHeight = 0;
-    this.jointIdsWithPenalty = {};
+    this.jointIdsWithPenalty = Object.create(null);
     this.containsPenaltyJoints = false;
     var self = this;
     this.joints.forEach(function (joint) {
@@ -507,8 +526,8 @@
 
     stats.unclampedFitness = fitness;
     stats.fitness = Utils.clamp(fitness, 0, 1);
-    stats.horizontalDistanceTravelled = this.getXPosition();
-    stats.verticalDistanceTravelled = this.getYPosition();
+    stats.horizontalDistanceTravelled = this.getXPosition() - this.initialPosition.x;
+    stats.verticalDistanceTravelled = this.getYPosition() - this.initialPosition.y;
     stats.averageSpeed = Math.sqrt(
       Math.pow(stats.horizontalDistanceTravelled / simulationTime, 2) +
         Math.pow(stats.verticalDistanceTravelled / simulationTime, 2)
