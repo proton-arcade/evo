@@ -21,7 +21,7 @@ package manager and no network access required.
 
 * **Create a Creature** — the editor. Start from a sample creature or build one from scratch.
 * **Start Simulation** — evolve a brain for the current design.
-* **My Creatures** — your saved designs and evolved creature variants (and the five samples: FROGGER, ROO, HAILER, SPIDER, SPRING).
+* **My Creatures** — your saved designs with independent evolved brain profiles for each action (and the five samples: FROGGER, ROO, HAILER, SPIDER, SPRING).
 * **Ecosystem** — choose two to six creatures to inhabit one shared simulation world.
 * **Gallery** — saved movement replays of the best creature from a generation.
 * **Settings** — display, evolution and neural-network settings.
@@ -40,8 +40,9 @@ package manager and no network access required.
 | **Decor** | Pick a cosmetic decoration (eyes, mouths, noses, hands, shoes, …) and tap a bone to attach it. |
 | **Erase** | Tap a component to delete it (deleting a joint deletes its bones and muscles). |
 
-Properties (weight, fitness penalty, bone weight, wing/inverted flags, muscle strength, muscle id,
-decoration scale/rotation/flip/order) are edited in the right-hand panel. Muscles that share a
+Properties (weight, fitness penalty, bone weight, wing/inverted flags, wing chord, muscle strength,
+muscle id, decoration scale/rotation/flip/order) are edited in the right-hand panel. Marked wings are
+highlighted in teal. Muscles that share a
 **muscle id** are contracted and expanded together by a single network output.
 
 Keyboard: `V` select, `J` joint, `B` bone, `M` muscle, `D` decoration, `E` erase, `Ctrl/Cmd+Z`
@@ -56,7 +57,7 @@ lifts, so beginning a two-finger gesture will not accidentally place a component
 ## The simulation
 
 * **Tasks**: Running, Jumping, Obstacle Jump, Climbing, Flying. Each task has its own scene
-  (flat ground, walls with rolling obstacles, or an endless staircase) and its own fitness function.
+  (flat ground, a course of progressively larger blocks, or an endless staircase) and its own fitness function.
 * **Evolution**: every generation evaluates a population of neural networks, sorts them by fitness
   and breeds the next generation by selection, recombination and mutation. The best creatures can be
   kept unchanged (*keep best creatures*).
@@ -64,15 +65,19 @@ lifts, so beginning a two-finger gesture will not accidentally place a component
   original: distance to the ground, four distance sensors, a rotating sensor, velocity, angular
   velocity, ground contacts and rotation. One output per unique muscle id, plus one output that
   rotates the distance sensor.
-* **HUD**: generation, live fitness, phase, autoplay, duration, creature selector, generation history,
-  best-of-generation thumbnail, a Pause/Resume button, playback controls, speed, visibility and camera
-  controls.
-* **Playback**: after each generation the recording of the best creature is played back. You can scrub
-  through it, save the evolved creature (including its brain) to My Creatures, save a separate replay
-  to the Gallery, or continue to the next generation.
-* **Ecosystem**: choose two to six library or sample creatures and a shared objective scene. Evolved
-  library entries keep their saved brain; other designs receive a fresh exploratory brain. Residents
-  share ground and obstacle physics, with Pause/Resume, run length and speed controls.
+* **HUD**: generation, live fitness, phase, autoplay, a skip-recap toggle, duration, creature selector,
+  generation history, best-of-generation thumbnail, a Pause/Resume button, playback controls, speed,
+  visibility and camera controls. Flying also offers live wing-speed, angle-of-attack, lift/drag,
+  estimated-weight and airtime diagnostics with per-wing force vectors. Visibility can focus the previous
+  generation's champion in front of the current population.
+* **Playback and saves**: after each generation the recording of the best creature is played back by
+  default. You can scrub through it, skip recaps, or use **Save run** to name a replay or run checkpoint.
+  **Save Brain** overwrites only the current action (Running, Jumping, Obstacle Jump, Climbing or
+  Flying) on the existing My Creatures entry and updates that action's best-generation replay in the
+  Gallery. My Creatures lets you choose which saved action brain to continue or retrain.
+* **Ecosystem**: choose two to six library or sample creatures and a shared objective scene. Library
+  entries reuse the saved brain for the selected action when available; otherwise they receive a fresh
+  exploratory brain. Residents share ground and obstacle physics, with Pause/Resume, run length and speed controls.
 * **Ghost**: while a generation is running, the best creature of the previous generation is drawn as a
   faded "ghost".
 
@@ -108,10 +113,12 @@ is needed; the same `index.html` can be opened locally.
 
 ## Saving and loading
 
-* **Creatures** — designs are saved in the browser and exported/imported as JSON files. From
-  generation playback, **Save Creature** stores one evolved design-and-brain variant in My Creatures.
-* **Recordings** — **Save Replay** stores the movement recording in the Gallery; that is separate from
-  the reusable evolved creature variant and can be exported as a JSON file.
+* **Creatures** — designs are saved in the browser and exported/imported as JSON files. **Save Brain**
+  updates the selected existing design in place; each action has its own chromosome and network settings,
+  so saving Running will not replace Jumping, Obstacle Jump, Climbing or Flying. It also updates the
+  Gallery replay linked to that action. It does not create a duplicate creature snapshot.
+* **Recordings** — **Save replay** stores a named movement recording in the Gallery. The brain save also
+  keeps the best-generation replay for that action up to date.
 * **Simulations** — a simulation (settings, scene, best creatures, current chromosomes) can be saved
   in the browser or downloaded as a file, and loaded again later so the evolution continues where it
   stopped. Auto-saving can be enabled in the settings.
@@ -155,11 +162,13 @@ js/boot.js                  startup and error handling
 * **Physics**: a small impulse/constraint solver on the XY plane. Joints are circle bodies whose mass
   is the joint weight, bones are hinge constraints between two joints, muscles are spring constraints
   between two bones that can additionally contract or expand with a force proportional to the muscle
-  strength. Wing bones add a lift force depending on the bone's rotation and velocity. A static
+  strength. Wings use their length × editable chord as an area proxy and include rotational wing-point
+  velocity, bounded lift/drag forces and a powered flap direction. A static
   broad-phase grid accelerates scene-geometry contacts; ecosystem mode also resolves cross-creature
   joint contacts so residents can share the same world.
-* **Fitness**: the objective trackers match the original formulas, including the per-joint ground
-  contact penalties, so the values are comparable to the Unity version.
+* **Fitness**: Running, Jumping and Climbing retain their original trackers. Obstacle Jump rewards
+  cleared blocks and course progress; Flying ignores the initial drop and gives extra weight to
+  average height and sustained airtime. Per-joint ground-contact penalties are still applied.
 * **Recordings**: 30 samples per second of joint positions and muscle forces, played back with
   interpolation.
 
@@ -173,8 +182,10 @@ Run the dependency-free checks with Node.js:
 for test in tests/*.js; do node "$test"; done
 ```
 
-The suite includes scratch-built editor-to-simulation scenarios, evolved-creature saving, ecosystem
-selection and shared physics, floor friction, simulation playback, and mobile/touch layout checks.
+The suite includes a deterministic muscle-driven flying creature that must take off and sustain
+airtime after ground contact (plus a no-flap control), editor-to-simulation scenarios, in-place
+action-brain/replay updates, ecosystem selection and shared physics, floor friction, simulation playback, and mobile/touch
+layout checks.
 
 ---
 

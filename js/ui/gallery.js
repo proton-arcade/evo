@@ -190,7 +190,9 @@
       this.recordings.forEach(function (entry) {
         var button = UI.el('button', 'gallery-entry');
         button.classList.toggle('active', entry.id === self.selectedId);
-        button.appendChild(UI.el('span', 'gallery-entry-title', 'Generation ' + entry.generation));
+        button.appendChild(
+          UI.el('span', 'gallery-entry-title', entry.name || 'Generation ' + entry.generation)
+        );
         button.appendChild(
           UI.el(
             'span',
@@ -209,11 +211,16 @@
       });
     },
 
-    currentRecording: function () {
+    currentEntry: function () {
       for (var i = 0; i < this.recordings.length; i++) {
-        if (this.recordings[i].id === this.selectedId) return this.recordings[i].recording;
+        if (this.recordings[i].id === this.selectedId) return this.recordings[i];
       }
       return null;
+    },
+
+    currentRecording: function () {
+      var entry = this.currentEntry();
+      return entry ? entry.recording : null;
     },
 
     selectRecording: function (id) {
@@ -321,12 +328,15 @@
     exportRecording: function () {
       var recording = this.currentRecording();
       if (!recording) return;
+      var entry = this.currentEntry();
+      var name = entry && entry.name ? entry.name : 'generation-' + recording.generation;
+      var safeName = name.replace(/[^\w-]+/g, '_');
       var json = JSON.stringify(EVO.CreatureRecording.encode(recording), null, 2);
       var blob = new Blob([json], { type: 'application/json' });
       var url = URL.createObjectURL(blob);
       var link = document.createElement('a');
       link.href = url;
-      link.download = 'generation-' + recording.generation + '-recording.json';
+      link.download = safeName + '-recording.json';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

@@ -1,4 +1,4 @@
-/* Regression check that the simulation Save Creature button stores a creature variant.
+/* Regression check that the simulation Save Brain button overwrites an action profile.
  * Run with: node tests/simulation-save-creature-control-test.js
  */
 'use strict';
@@ -56,7 +56,7 @@ global.EVO = {
   },
   Modal: { alert: function (message, title) { alerts.push({ message: message, title: title }); } },
   Storage: {
-    saveEvolvedCreature: function () { savedCreatureArgs = Array.prototype.slice.call(arguments); },
+    saveEvolvedBrain: function () { savedCreatureArgs = Array.prototype.slice.call(arguments); },
     saveRecording: function (recording) { savedRecording = recording; },
   },
   App: {},
@@ -74,19 +74,26 @@ var screen = Object.create(EVO.SimulationScreen);
 screen.settings = { Objective: EVO.Objective.Running, SimulationTime: 10 };
 screen.refreshHud = function () {};
 screen.buildHud(el('div'));
-screen.recording = { task: EVO.Objective.Running, generation: 2, networkSettings: {} };
+screen.recording = {
+  task: EVO.Objective.Running,
+  generation: 2,
+  networkSettings: {},
+  movementData: { sampleTimestamps: [0] },
+};
+screen.libraryCreatureId = 'saved-design-1';
 screen.evolvedChromosome = [0.1, -0.25, 0.9];
 screen.data = { LastV2SimulatedGeneration: 0 };
 screen.saveCreatureButton.listeners.click();
-assert(savedCreatureArgs, 'the playback Save Creature action stores a creature record');
-assert.strictEqual(savedCreatureArgs[0], screen.recording);
-assert.strictEqual(savedCreatureArgs[1], screen.evolvedChromosome);
-assert.strictEqual(savedCreatureArgs[2], screen.recording.networkSettings);
-assert.strictEqual(savedCreatureArgs[3], 0);
-assert.strictEqual(alerts[0].title, 'Creature saved');
+assert(savedCreatureArgs, 'the playback Save Brain action updates a creature profile');
+assert.strictEqual(savedCreatureArgs[0], screen.libraryCreatureId);
+assert.strictEqual(savedCreatureArgs[1], screen.recording);
+assert.strictEqual(savedCreatureArgs[2], screen.evolvedChromosome);
+assert.strictEqual(savedCreatureArgs[3], screen.recording.networkSettings);
+assert.strictEqual(savedCreatureArgs[4], 0);
+assert.strictEqual(alerts[0].title, 'Brain updated');
 
 screen.saveRecordingButton.listeners.click();
 assert.strictEqual(savedRecording, screen.recording, 'the separate replay button still saves to the Gallery');
 assert.strictEqual(alerts[1].title, 'Saved');
 
-console.log('Simulation Save Creature and separate Save Replay control checks passed.');
+console.log('Simulation Save Brain overwrite and separate Save Replay control checks passed.');

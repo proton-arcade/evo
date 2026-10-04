@@ -218,6 +218,13 @@
     return true;
   };
 
+  CreatureBuilder.prototype.setBoneWingChord = function (id, chord) {
+    var bone = this.findBone(id);
+    if (!bone) return false;
+    bone.wingChord = Utils.clamp(chord, 0.25, 5);
+    return true;
+  };
+
   CreatureBuilder.prototype.setBoneInverted = function (id, inverted) {
     var bone = this.findBone(id);
     if (!bone) return false;

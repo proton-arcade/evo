@@ -72,7 +72,7 @@
       this.attachEvents();
       // Keep the application's current design in sync so that "Simulate"
       // works even if the creature was not modified.
-      App.setDesign(this.builder.design);
+      App.setDesign(this.builder.design, this.designId);
     },
 
     hide: function () {
@@ -236,7 +236,7 @@
       this.activePointerId = null;
       this.isPointerDown = false;
       if (this.nameInput) this.nameInput.value = this.builder.design.name || '';
-      App.setDesign(this.builder.design);
+      App.setDesign(this.builder.design, this.designId);
       this.frameDesign();
       this.refreshSettings();
       this.render();
@@ -917,7 +917,7 @@
       design.name = design.name || 'Unnamed';
       if (this.nameInput) this.nameInput.value = design.name;
       this.designId = Storage.saveDesign(design, this.designId);
-      App.setDesign(design);
+      App.setDesign(design, this.designId);
       Modal.alert('"' + design.name + '" was saved.', 'Saved');
     },
 
@@ -1148,6 +1148,23 @@
             }).element
           );
           if (bone.isWing) {
+            panel.add(
+              Widgets.slider({
+                label: 'Wing chord',
+                min: 0.25,
+                max: 5,
+                step: 0.05,
+                value: bone.wingChord === undefined ? 1 : bone.wingChord,
+                format: function (v) {
+                  return v.toFixed(2) + 'u';
+                },
+                onInput: function (value) {
+                  self.applyProperty(function (builder) {
+                    return builder.setBoneWingChord(bone.id, value);
+                  });
+                },
+              }).element
+            );
             panel.add(
               Widgets.toggle({
                 label: 'Invert',

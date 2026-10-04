@@ -448,6 +448,13 @@
       Store.setBool('SHOW_ONE_AT_ATIME_KEY', v);
     },
 
+    get SkipGenerationRecap() {
+      return Store.getBool('SKIP_GENERATION_RECAP_KEY', false);
+    },
+    set SkipGenerationRecap(v) {
+      Store.setBool('SKIP_GENERATION_RECAP_KEY', v);
+    },
+
     get HiddenCreatureOpacity() {
       return Store.getFloat('HIDDEN_CREATURE_OPACITY_KEY', 0.225);
     },

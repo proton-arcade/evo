@@ -44,7 +44,11 @@ var profileWeightCount = EVO.FeedForwardNetwork.chromosomeLength(
   profileSettings
 );
 var savedChromosome = new Array(profileWeightCount);
-for (var weight = 0; weight < savedChromosome.length; weight++) savedChromosome[weight] = 0.125;
+var savedFlyingChromosome = new Array(profileWeightCount);
+for (var weight = 0; weight < savedChromosome.length; weight++) {
+  savedChromosome[weight] = 0.125;
+  savedFlyingChromosome[weight] = -0.25;
+}
 var entries = [
   { name: EVO.DefaultCreatures[0].name, design: EVO.DefaultCreatures[0].design },
   {
@@ -56,6 +60,22 @@ var entries = [
       chromosome: savedChromosome,
       networkSettings: EVO.NeuralNetworkSettings.encode(profileSettings),
       lastV2SimulatedGeneration: 0,
+    },
+    evolvedBrains: {
+      running: {
+        task: EVO.Objective.Running,
+        generation: 3,
+        chromosome: savedChromosome,
+        networkSettings: EVO.NeuralNetworkSettings.encode(profileSettings),
+        lastV2SimulatedGeneration: 0,
+      },
+      flying: {
+        task: EVO.Objective.Flying,
+        generation: 5,
+        chromosome: savedFlyingChromosome,
+        networkSettings: EVO.NeuralNetworkSettings.encode(profileSettings),
+        lastV2SimulatedGeneration: 0,
+      },
     },
   },
 ];
@@ -87,6 +107,14 @@ assert(ecosystem.elapsed > elapsed, 'resume continues the shared simulation');
 ecosystem.stop();
 assert.strictEqual(ecosystem.isRunning, false, 'stopping releases the live ecosystem');
 assert.strictEqual(ecosystem.creatures.length, 0);
+
+ecosystem.start(entries, EVO.Objective.Flying);
+assert.deepStrictEqual(
+  ecosystem.creatures[1].brain.network.toFloatArray(),
+  savedFlyingChromosome,
+  'ecosystem residents use the saved profile matching the selected action'
+);
+ecosystem.stop();
 
 ecosystem.start(entries, EVO.Objective.Running, null, 0.05);
 ecosystem.update(0.1, 1);

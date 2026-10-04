@@ -64,7 +64,7 @@
    * BoneData
    * ------------------------------------------------------------------ */
   var BoneData = {
-    create: function (id, startJointID, endJointID, weight, isWing, inverted, legacy) {
+    create: function (id, startJointID, endJointID, weight, isWing, inverted, legacy, wingChord) {
       return {
         id: id,
         startJointID: startJointID,
@@ -73,6 +73,7 @@
         isWing: !!isWing,
         inverted: !!inverted,
         legacy: legacy === undefined ? false : !!legacy,
+        wingChord: wingChord === undefined ? 1 : Math.max(0.1, wingChord),
       };
     },
 
@@ -84,7 +85,12 @@
         weight: Utils.round4(data.weight),
         legacy: !!data.legacy,
       };
-      if (data.isWing) json.wing = true;
+      if (data.isWing) {
+        json.wing = true;
+        if (data.wingChord !== undefined && data.wingChord !== 1) {
+          json.wingChord = Utils.round4(data.wingChord);
+        }
+      }
       if (data.inverted) json.inverted = true;
       return json;
     },
@@ -97,7 +103,8 @@
         json.weight,
         !!json.wing,
         !!json.inverted,
-        json.legacy === undefined ? true : !!json.legacy
+        json.legacy === undefined ? true : !!json.legacy,
+        json.wingChord === undefined ? 1 : json.wingChord
       );
     },
   };
@@ -534,11 +541,12 @@
         BestCreatures: [],
         CurrentChromosomes: [],
         LastV2SimulatedGeneration: 0,
+        LibraryCreatureId: null,
       };
     },
 
     encode: function (data) {
-      return {
+      var json = {
         version: data.Version,
         simulationSettings: SimulationSettings.encode(data.Settings),
         networkSettings: EVO.NeuralNetworkSettings.encode(data.NetworkSettings),
@@ -548,6 +556,8 @@
         currentChromosomes: data.CurrentChromosomes,
         lastV2SimulationGeneration: data.LastV2SimulatedGeneration,
       };
+      if (data.LibraryCreatureId) json.libraryCreatureId = data.LibraryCreatureId;
+      return json;
     },
 
     decode: function (json) {
@@ -561,6 +571,7 @@
       data.BestCreatures = (json.bestCreatures || []).map(ChromosomeData.decode);
       data.CurrentChromosomes = json.currentChromosomes || [];
       data.LastV2SimulatedGeneration = json.lastV2SimulationGeneration || 0;
+      data.LibraryCreatureId = json.libraryCreatureId || null;
       return data;
     },
   };

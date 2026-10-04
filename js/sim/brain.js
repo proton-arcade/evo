@@ -311,30 +311,76 @@
     this.maxHeightJumped = 0;
     this.totalFrameCount = 0;
     this.framesSpentNotTouchingGround = 0;
+    this.settledOnGround = false;
+    this.currentAirborneTime = 0;
+    this.totalAirborneTime = 0;
+    this.maxSustainedAirborneTime = 0;
+    this.totalAirborneHeight = 0;
   }
   FlyingObjectiveTracker.MAX_HEIGHT = 40;
 
-  FlyingObjectiveTracker.prototype.fixedUpdate = function () {
+  FlyingObjectiveTracker.prototype.fixedUpdate = function (dt) {
     var creature = this.creature;
-    var distanceFromGround = creature.distanceFromGround();
-    var noJointsAreTouchingGround = creature.getNumberOfPointsTouchingGround() === 0;
-
-    var safeDistanceFromGround = Math.max(0, distanceFromGround);
-    this.maxHeightJumped = Math.max(safeDistanceFromGround, this.maxHeightJumped);
-    this.totalFrameCount += 1;
-    if (noJointsAreTouchingGround) {
-      this.framesSpentNotTouchingGround += 1;
+    var touchingGroundCount = creature.getNumberOfPointsTouchingGround();
+    if (!this.settledOnGround) {
+      // Ignore the initial drop from the spawn position. Start measuring only
+      // after at least one ground contact proves the creature has settled.
+      if (touchingGroundCount > 0) this.settledOnGround = true;
+      return;
     }
+
+    this.totalFrameCount += 1;
+    if (touchingGroundCount > 0) {
+      this.currentAirborneTime = 0;
+      return;
+    }
+
+    var distanceFromGround = Math.max(0, creature.distanceFromGround());
+    this.maxHeightJumped = Math.max(distanceFromGround, this.maxHeightJumped);
+    this.framesSpentNotTouchingGround += 1;
+    this.totalAirborneHeight += distanceFromGround;
+    this.currentAirborneTime += dt || 0;
+    this.totalAirborneTime += dt || 0;
+    this.maxSustainedAirborneTime = Math.max(
+      this.maxSustainedAirborneTime,
+      this.currentAirborneTime
+    );
   };
 
   FlyingObjectiveTracker.prototype.evaluateFitness = function (simulationTime) {
-    var heightFitness = Math.min(
-      1.0,
-      ((simulationTime / 10.0) * this.maxHeightJumped) / FlyingObjectiveTracker.MAX_HEIGHT
+    if (!this.settledOnGround || this.totalFrameCount === 0) return 0;
+    simulationTime = Math.max(0.001, simulationTime || 0);
+    var durationScale = Math.min(1, simulationTime / 10.0);
+    var maxHeightFitness = Utils.clamp(
+      (this.maxHeightJumped / FlyingObjectiveTracker.MAX_HEIGHT) * durationScale,
+      0,
+      1
     );
-    var liftOffFitness =
-      this.totalFrameCount === 0 ? 0 : this.framesSpentNotTouchingGround / this.totalFrameCount;
-    return (heightFitness + liftOffFitness) / 2.0;
+    var averageAirborneHeight = this.framesSpentNotTouchingGround
+      ? this.totalAirborneHeight / this.framesSpentNotTouchingGround
+      : 0;
+    var averageHeightFitness = Utils.clamp(
+      (averageAirborneHeight / FlyingObjectiveTracker.MAX_HEIGHT) * durationScale,
+      0,
+      1
+    );
+    var airtimeFitness = this.framesSpentNotTouchingGround / this.totalFrameCount;
+    var sustainedAirtimeFitness = Utils.clamp(
+      this.maxSustainedAirborneTime / simulationTime,
+      0,
+      1
+    );
+
+    // Max height still matters, but average airborne height and continuous
+    // airtime make a brief jump less valuable than controlled sustained flight.
+    return Utils.clamp(
+      0.2 * maxHeightFitness +
+        0.1 * averageHeightFitness +
+        0.35 * airtimeFitness +
+        0.35 * sustainedAirtimeFitness,
+      0,
+      1
+    );
   };
 
   function ObstacleJumpObjectiveTracker(creature) {
@@ -342,13 +388,54 @@
     this.collisionDurations = new Map();
     this.collidedJoints = new Set();
     this.maxHeightJumped = 0;
+    this.blocks = creature.scene && Array.isArray(creature.scene.blocks) ? creature.scene.blocks : [];
+    this.passedBlockIndices = Object.create(null);
+    this.passedBlockCount = 0;
+    this.initialX = creature.initialPosition ? creature.initialPosition.x : creature.getXPosition();
+    this.maxForwardX = this.getLeadingEdgeX();
   }
   ObstacleJumpObjectiveTracker.MAX_HEIGHT = 20;
   ObstacleJumpObjectiveTracker.MAX_COLLISION_DURATION_PER_JOINT = 0.4;
 
+  ObstacleJumpObjectiveTracker.prototype.getLeadingEdgeX = function () {
+    var joints = this.creature.joints || [];
+    var maxX = -Infinity;
+    for (var i = 0; i < joints.length; i++) {
+      var body = joints[i].body || joints[i];
+      maxX = Math.max(maxX, body.x + (body.radius || 0));
+    }
+    return maxX === -Infinity ? this.creature.getXPosition() : maxX;
+  };
+
+  ObstacleJumpObjectiveTracker.prototype.getTrailingEdgeX = function () {
+    var joints = this.creature.joints || [];
+    var minX = Infinity;
+    for (var i = 0; i < joints.length; i++) {
+      var body = joints[i].body || joints[i];
+      minX = Math.min(minX, body.x - (body.radius || 0));
+    }
+    return minX === Infinity ? this.creature.getXPosition() : minX;
+  };
+
   ObstacleJumpObjectiveTracker.prototype.fixedUpdate = function (dt) {
     var creature = this.creature;
     this.maxHeightJumped = Math.max(creature.distanceFromGround(), this.maxHeightJumped);
+
+    if (this.blocks.length) {
+      this.maxForwardX = Math.max(this.maxForwardX, this.getLeadingEdgeX());
+      var trailingEdgeX = this.getTrailingEdgeX();
+      for (var i = 0; i < this.blocks.length; i++) {
+        if (this.passedBlockIndices[i]) continue;
+        var block = this.blocks[i];
+        var rightEdge = block.right === undefined ? block.x + block.width / 2 : block.right;
+        // Count a block only after the whole creature has cleared its far edge.
+        if (trailingEdgeX > rightEdge + 0.05) {
+          this.passedBlockIndices[i] = true;
+          this.passedBlockCount++;
+        }
+      }
+    }
+
     creature.addObstacleCollidingJointsToSet(this.collidedJoints);
     var self = this;
     this.collidedJoints.forEach(function (joint) {
@@ -369,7 +456,8 @@
     this.collisionDurations.forEach(function (duration) {
       totalCollisionDuration += duration;
     });
-    var averageCollisionDuration = totalCollisionDuration / this.creature.joints.length;
+    var jointCount = this.creature.joints ? this.creature.joints.length : 0;
+    var averageCollisionDuration = jointCount ? totalCollisionDuration / jointCount : 0;
 
     var collisionFitness =
       1 -
@@ -378,6 +466,25 @@
         0,
         1
       );
+
+    if (this.blocks.length) {
+      var passedFitness = this.passedBlockCount / this.blocks.length;
+      var lastBlock = this.blocks[this.blocks.length - 1];
+      var courseEndX = lastBlock.right === undefined
+        ? lastBlock.x + lastBlock.width / 2
+        : lastBlock.right;
+      var courseLength = Math.max(1, courseEndX - this.initialX);
+      var progressFitness = Utils.clamp((this.maxForwardX - this.initialX) / courseLength, 0, 1);
+      // Clearing the course is the primary goal. Forward progress and avoiding
+      // prolonged contact provide smaller gradients while a creature learns.
+      return Utils.clamp(
+        0.82 * passedFitness + 0.13 * progressFitness + 0.05 * collisionFitness,
+        0,
+        1
+      );
+    }
+
+    // Preserve the legacy rolling-obstacle scoring for old saved scenes.
     return Math.max(
       0.5 * collisionFitness,
       0.3 * heightFitness + 0.7 * collisionFitness

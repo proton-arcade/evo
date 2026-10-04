@@ -99,6 +99,8 @@
     joint: '#e10000',
     jointOutline: '#a80000',
     bone: '#2f2f2f',
+    wing: '#138b91',
+    wingForce: '#e58b18',
     muscleContracting: '#8f2b2b',
     muscleExpanding: '#5f9ec4',
     muscleNeutral: '#d98c8c',
@@ -318,6 +320,13 @@
         }
       }
 
+      // 5. Optional aerodynamic force vectors for live wing debugging.
+      if (options.showWingDebug && creature.bones) {
+        for (var w = 0; w < creature.bones.length; w++) {
+          if (creature.bones[w].isWing) this.drawWingForceVector(ctx, creature.bones[w], camera);
+        }
+      }
+
       ctx.restore();
     },
 
@@ -335,11 +344,12 @@
       var by = camera.worldToScreenY(end.y);
 
       var selected = selectedBones && selectedBones[bone.data.id];
+      var isWing = !!(bone.isWing || (bone.data && bone.data.isWing));
       ctx.save();
       ctx.globalAlpha = opacity;
       ctx.lineCap = 'round';
-      ctx.strokeStyle = selected ? COLORS.selection : COLORS.bone;
-      ctx.lineWidth = EVO.Creature.CONNECTION_WIDTH * scale;
+      ctx.strokeStyle = selected ? COLORS.selection : isWing ? COLORS.wing : COLORS.bone;
+      ctx.lineWidth = EVO.Creature.CONNECTION_WIDTH * scale * (isWing ? 1.45 : 1);
       ctx.beginPath();
       ctx.moveTo(ax, ay);
       ctx.lineTo(bx, by);
@@ -370,6 +380,40 @@
         ctx.strokeStyle = COLORS.jointOutline;
         ctx.stroke();
       }
+      ctx.restore();
+    },
+
+    drawWingForceVector: function (ctx, bone, camera) {
+      var debug = bone.wingDebug;
+      if (!debug) return;
+      var magnitude = Math.sqrt(debug.forceX * debug.forceX + debug.forceY * debug.forceY);
+      if (magnitude < 0.01) return;
+      var origin = bone.aerodynamicCenter || bone.center;
+      if (!origin) return;
+      var length = Utils.clamp(0.7 + Math.log(1 + magnitude) * 0.18, 0.7, 3.2);
+      var endX = origin.x + (debug.forceX / magnitude) * length;
+      var endY = origin.y + (debug.forceY / magnitude) * length;
+      var x1 = camera.worldToScreenX(origin.x);
+      var y1 = camera.worldToScreenY(origin.y);
+      var x2 = camera.worldToScreenX(endX);
+      var y2 = camera.worldToScreenY(endY);
+      var angle = Math.atan2(y2 - y1, x2 - x1);
+      var head = 7;
+
+      ctx.save();
+      ctx.strokeStyle = COLORS.wingForce;
+      ctx.fillStyle = COLORS.wingForce;
+      ctx.lineWidth = Math.max(2, camera.pixelsPerUnit() * 0.06);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x2, y2);
+      ctx.lineTo(x2 - head * Math.cos(angle - Math.PI / 6), y2 - head * Math.sin(angle - Math.PI / 6));
+      ctx.lineTo(x2 - head * Math.cos(angle + Math.PI / 6), y2 - head * Math.sin(angle + Math.PI / 6));
+      ctx.closePath();
+      ctx.fill();
       ctx.restore();
     },
 
@@ -439,12 +483,30 @@
         }
       }
 
-      // Bones
-      ctx.strokeStyle = COLORS.bone;
-      ctx.lineWidth = EVO.Creature.CONNECTION_WIDTH * scale;
+      // A warm outline makes the previous-generation champion easy to pick
+      // out when Visibility focuses it above the current population.
+      if (options.highlight) {
+        ctx.save();
+        ctx.strokeStyle = '#efaa35';
+        ctx.lineWidth = Math.max(2, EVO.Creature.CONNECTION_WIDTH * scale + 3);
+        ctx.lineCap = 'round';
+        for (var outlineBone = 0; outlineBone < playback.bones.length; outlineBone++) {
+          var outlined = playback.bones[outlineBone];
+          ctx.beginPath();
+          ctx.moveTo(camera.worldToScreenX(outlined.start.x), camera.worldToScreenY(outlined.start.y));
+          ctx.lineTo(camera.worldToScreenX(outlined.end.x), camera.worldToScreenY(outlined.end.y));
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // Bones; wings are heavier and teal in the editor, live view and replay.
       ctx.lineCap = 'round';
       for (var b = 0; b < playback.bones.length; b++) {
         var bone = playback.bones[b];
+        var isWing = !!(bone.isWing || (bone.data && bone.data.isWing));
+        ctx.strokeStyle = isWing ? COLORS.wing : COLORS.bone;
+        ctx.lineWidth = EVO.Creature.CONNECTION_WIDTH * scale * (isWing ? 1.45 : 1);
         ctx.beginPath();
         ctx.moveTo(camera.worldToScreenX(bone.start.x), camera.worldToScreenY(bone.start.y));
         ctx.lineTo(camera.worldToScreenX(bone.end.x), camera.worldToScreenY(bone.end.y));

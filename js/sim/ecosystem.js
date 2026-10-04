@@ -11,6 +11,11 @@
   var PHYSICS_SUBSTEPS = 3;
   var PHYSICS_ITERATIONS = 4;
 
+  function objectiveBrainKey(objective) {
+    var name = EVO.ObjectiveUtil.stringRepresentation(objective).replace(/[^a-z0-9]/gi, '');
+    return name ? name.charAt(0).toLowerCase() + name.substr(1) : 'running';
+  }
+
   function EcosystemSimulation() {
     this.world = null;
     this.scene = null;
@@ -98,7 +103,10 @@
   };
 
   EcosystemSimulation.prototype.applyBrain = function (creature, entry) {
-    var profile = entry.evolvedCreature;
+    var profile = entry.evolvedBrains && entry.evolvedBrains[objectiveBrainKey(this.objective)];
+    if (!profile && entry.evolvedCreature && entry.evolvedCreature.task === this.objective) {
+      profile = entry.evolvedCreature;
+    }
     var brainObjective = profile ? profile.task : this.objective;
     var lastV2Generation = profile ? profile.lastV2SimulatedGeneration || 0 : 0;
     var brainType = EVO.Brains.brainTypeForSimulation(brainObjective, lastV2Generation);
