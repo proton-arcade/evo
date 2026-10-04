@@ -233,6 +233,14 @@
 
       /* --- Top right: thumbnail + buttons --- */
       var topRight = UI.el('div', 'hud hud-top-right');
+      var exitButton = UI.el('button', 'evo-button small', 'Exit');
+      exitButton.title = 'Exit the simulation and return to the home screen';
+      exitButton.setAttribute('aria-label', 'Exit simulation');
+      exitButton.addEventListener('click', function () {
+        self.exitSimulation();
+      });
+      topRight.appendChild(exitButton);
+
       var frame = UI.el('div', 'thumbnail-frame');
       this.thumbnailCanvas = UI.el('canvas', 'thumbnail-canvas');
       frame.appendChild(this.thumbnailCanvas);
@@ -260,9 +268,9 @@
             },
             {
               label: 'Settings',
-              onClick: function () {
-                self.settingsVisible = !self.settingsVisible;
-                self.settingsDrawer.classList.toggle('hidden', !self.settingsVisible);
+              onClick: function (event) {
+                self.settingsButton = event && event.currentTarget;
+                self.setSettingsVisible(!self.settingsVisible);
               },
               className: 'small',
             },
@@ -277,13 +285,6 @@
               label: 'Load',
               onClick: function () {
                 self.showLoadMenu();
-              },
-              className: 'small',
-            },
-            {
-              label: 'Back',
-              onClick: function () {
-                App.show('home');
               },
               className: 'small',
             },
@@ -362,6 +363,29 @@
       element.appendChild(speed);
 
       this.refreshHud();
+    },
+
+    exitSimulation: function () {
+      App.show('home');
+    },
+
+    setSettingsVisible: function (visible) {
+      this.settingsVisible = !!visible;
+      if (this.settingsDrawer) {
+        this.settingsDrawer.classList.toggle('hidden', !this.settingsVisible);
+      }
+    },
+
+    handleSettingsOutsideClick: function (event) {
+      if (!this.settingsVisible) return;
+      var target = event && event.target;
+      if (
+        (target && this.settingsDrawer && this.settingsDrawer.contains(target)) ||
+        (target && this.settingsButton && this.settingsButton.contains(target))
+      ) {
+        return;
+      }
+      this.setSettingsVisible(false);
     },
 
     buildSettingsDrawer: function (element) {
@@ -1034,6 +1058,10 @@
         self.resize();
       };
       global.addEventListener('resize', this.onResize);
+      this.onDocumentClick = function (event) {
+        self.handleSettingsOutsideClick(event);
+      };
+      document.addEventListener('click', this.onDocumentClick);
 
       this.onKeyDown = function (event) {
         if (event.target && /INPUT|TEXTAREA|SELECT/.test(event.target.tagName)) return;
@@ -1157,6 +1185,7 @@
 
     detachEvents: function () {
       global.removeEventListener('resize', this.onResize);
+      document.removeEventListener('click', this.onDocumentClick);
       global.removeEventListener('keydown', this.onKeyDown);
       global.removeEventListener('blur', this.onBlur);
       document.removeEventListener('visibilitychange', this.onVisibilityChange);

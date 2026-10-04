@@ -260,6 +260,7 @@
 
     setTool: function (tool) {
       this.tool = tool;
+      if (tool !== Tools.SELECT) this.selection = null;
       this.pending = null;
       this.builder.cancelCurrentBone();
       this.builder.cancelCurrentMuscle();
@@ -771,22 +772,7 @@
     },
 
     hitBone: function (point) {
-      var hit = this.builder.hitTest(point, this.hitTolerance() + 0.4);
-      if (!hit) return null;
-      if (hit.type === 'bone') return this.builder.findBone(hit.id);
-      if (hit.type === 'joint') {
-        // Pick the first bone attached to the joint.
-        var result = null;
-        this.builder.forEachBoneOfJoint(hit.id, function (bone) {
-          if (!result) result = bone;
-        });
-        return result;
-      }
-      if (hit.type === 'muscle') {
-        var muscle = this.builder.findMuscle(hit.id);
-        return muscle ? this.builder.findBone(muscle.startBoneID) : null;
-      }
-      return null;
+      return this.builder.hitTestBone(point, this.hitTolerance() + 0.4);
     },
 
     completeBone: function (endJointId) {
