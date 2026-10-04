@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Evolution — Evolving Virtual Creatures</title>
+    <meta
+      name="description"
+      content="A sandbox simulator that demonstrates machine learning with evolutionary algorithms. Design creatures out of joints, bones and muscles and evolve their neural networks."
+    />
+    <link rel="stylesheet" href="css/style.css" />
+
+    <!-- Core utilities, storage and settings -->
+    <script src="js/core/util.js"></script>
+    <!-- Neural networks and the evolutionary algorithms -->
+    <script src="js/core/network.js"></script>
+    <script src="js/core/algorithms.js"></script>
+    <!-- The data model (creature designs, settings, recordings, save files) -->
+    <script src="js/core/data.js"></script>
+    <script src="js/data/defaultCreatures.js"></script>
+    <!-- Simulation: physics, scenes, creatures and brains -->
+    <script src="js/sim/physics.js"></script>
+    <script src="js/sim/scene.js"></script>
+    <script src="js/sim/creature.js"></script>
+    <script src="js/sim/brain.js"></script>
+    <script src="js/sim/builder.js"></script>
+    <script src="js/sim/evolution.js"></script>
+    <script src="js/sim/playback.js"></script>
+    <!-- Rendering -->
+    <script src="js/render/decorations.js"></script>
+    <script src="js/render/renderer.js"></script>
+    <!-- User interface -->
+    <script src="js/ui/app.js"></script>
+    <script src="js/ui/editor.js"></script>
+    <script src="js/ui/simulation.js"></script>
+    <script src="js/ui/gallery.js"></script>
+    <script src="js/boot.js"></script>
+  </head>
+  <body>
+    <div id="screens"></div>
+    <noscript>
+      <p style="padding: 20px">Evolution needs JavaScript to run. Please enable JavaScript and reload the page.</p>
+    </noscript>
+  </body>
+</html>
