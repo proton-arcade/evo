@@ -46,6 +46,17 @@
         this.animationFrame = null;
       }
       this.detachEvents();
+      // Gallery is a singleton screen; release decoded recordings on navigation.
+      this.playback = null;
+      this.recordings = [];
+      this.bounds = null;
+      this.canvas = null;
+      this.canvasContainer = null;
+      this.listElement = null;
+      this.playButton = null;
+      this.seekSlider = null;
+      this.timeLabel = null;
+      this.infoLabel = null;
     },
 
     buildLayout: function () {
@@ -81,7 +92,7 @@
       var controls = UI.el('div', 'gallery-controls');
       this.playButton = UI.el('button', 'hud-button play-button', '\u25B6');
       this.playButton.addEventListener('click', function () {
-        self.playbackPlaying = !self.playbackPlaying;
+        self.togglePlayback();
       });
       controls.appendChild(this.playButton);
 
@@ -95,6 +106,7 @@
         self.playbackPlaying = false;
         self.playbackTime = parseFloat(self.seekSlider.value) * self.duration();
         self.playback.seek(self.playbackTime);
+        self.refreshPlayButton();
       });
       controls.appendChild(this.seekSlider);
 
@@ -230,7 +242,20 @@
     },
 
     refreshPlayButton: function () {
-      this.playButton.textContent = this.playbackPlaying ? '\u2016' : '\u25B6';
+      this.playButton.textContent = this.playback && this.playbackPlaying ? '\u2016' : '\u25B6';
+      this.playButton.disabled = !this.playback;
+    },
+
+    togglePlayback: function () {
+      if (!this.playback) return;
+      if (this.playbackPlaying) {
+        this.playbackPlaying = false;
+      } else {
+        if (this.playbackTime >= this.duration() - 0.001) this.playbackTime = 0;
+        this.playbackPlaying = true;
+        this.playback.seek(this.playbackTime);
+      }
+      this.refreshPlayButton();
     },
 
     loop: function () {
@@ -252,8 +277,10 @@
       var duration = this.duration();
       if (this.playbackTime >= duration) {
         this.playbackTime = duration;
+        this.playbackPlaying = false;
       }
       this.playback.seek(this.playbackTime);
+      this.refreshPlayButton();
     },
 
     draw: function () {
@@ -347,7 +374,7 @@
         if (event.target && /INPUT|TEXTAREA|SELECT/.test(event.target.tagName)) return;
         if (event.key === ' ') {
           event.preventDefault();
-          self.playbackPlaying = !self.playbackPlaying;
+          self.togglePlayback();
         }
       };
       global.addEventListener('resize', this.onResize);

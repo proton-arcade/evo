@@ -21,8 +21,9 @@ package manager and no network access required.
 
 * **Create a Creature** — the editor. Start from a sample creature or build one from scratch.
 * **Start Simulation** — evolve a brain for the current design.
-* **My Creatures** — your saved designs (and the five samples: FROGGER, ROO, HAILER, SPIDER, SPRING).
-* **Gallery** — replays of the best creature of every saved generation.
+* **My Creatures** — your saved designs and evolved creature variants (and the five samples: FROGGER, ROO, HAILER, SPIDER, SPRING).
+* **Ecosystem** — choose two to six creatures to inhabit one shared simulation world.
+* **Gallery** — saved movement replays of the best creature from a generation.
 * **Settings** — display, evolution and neural-network settings.
 * **Help** — a short explanation of the simulation.
 
@@ -64,15 +65,21 @@ lifts, so beginning a two-finger gesture will not accidentally place a component
   velocity, ground contacts and rotation. One output per unique muscle id, plus one output that
   rotates the distance sensor.
 * **HUD**: generation, live fitness, phase, autoplay, duration, creature selector, generation history,
-  best-of-generation thumbnail, playback controls, speed, visibility and camera controls.
+  best-of-generation thumbnail, a Pause/Resume button, playback controls, speed, visibility and camera
+  controls.
 * **Playback**: after each generation the recording of the best creature is played back. You can scrub
-  through it, save it to the gallery, or continue to the next generation.
+  through it, save the evolved creature (including its brain) to My Creatures, save a separate replay
+  to the Gallery, or continue to the next generation.
+* **Ecosystem**: choose two to six library or sample creatures and a shared objective scene. Evolved
+  library entries keep their saved brain; other designs receive a fresh exploratory brain. Residents
+  share ground and obstacle physics, with Pause/Resume, run length and speed controls.
 * **Ghost**: while a generation is running, the best creature of the previous generation is drawn as a
   faded "ghost".
 
-Keyboard: `Space` pause/continue, `V` toggle visibility, `R` reset the camera, arrow keys switch the
-watched creature (or scrub the playback). Mouse: drag to pan, wheel/pinch to zoom. On touch screens,
-drag with one finger to pan and use two fingers to pan and zoom.
+Keyboard: `Space` pause/continue (or use the on-screen Pause/Resume button), `V` toggle visibility,
+`R` reset the camera, arrow keys switch the watched creature (or scrub the playback). Mouse: drag to
+pan, wheel/pinch to zoom. On touch screens, drag with one finger to pan and use two fingers to pan
+and zoom.
 
 ---
 
@@ -88,6 +95,7 @@ is needed; the same `index.html` can be opened locally.
 * **Simulation:** drag with one finger to move the camera; two fingers pan and pinch to zoom. Mouse
   wheel zoom remains available on desktop.
 * **Gallery:** use two fingers on the recording canvas to pan and zoom the replay.
+* **Ecosystem:** tap multiple resident cards, then pan with one finger or pan/zoom with two fingers.
 * Controls have larger tap targets on touch devices, and editor panels, settings and recording lists
   can be scrolled with touch momentum. The layout adapts for narrow portrait and landscape screens.
 * Safe-area insets are respected on notched phones. Screen dimensions are refreshed after rotation,
@@ -100,9 +108,10 @@ is needed; the same `index.html` can be opened locally.
 
 ## Saving and loading
 
-* **Creatures** — saved in the browser and exported/imported as JSON files.
-* **Recordings** — the best creature of a generation can be saved to the gallery, played back and
-  exported as a JSON file.
+* **Creatures** — designs are saved in the browser and exported/imported as JSON files. From
+  generation playback, **Save Creature** stores one evolved design-and-brain variant in My Creatures.
+* **Recordings** — **Save Replay** stores the movement recording in the Gallery; that is separate from
+  the reusable evolved creature variant and can be exported as a JSON file.
 * **Simulations** — a simulation (settings, scene, best creatures, current chromosomes) can be saved
   in the browser or downloaded as a file, and loaded again later so the evolution continues where it
   stopped. Auto-saving can be enabled in the settings.
@@ -127,12 +136,14 @@ js/sim/creature.js          the creature (joints, bones, muscles, wings, contact
 js/sim/brain.js             the brains and the objective trackers
 js/sim/builder.js           the model behind the editor (placing/deleting components, undo history)
 js/sim/evolution.js         the evolution loop (batches, evaluation, breeding)
+js/sim/ecosystem.js         multiple creatures in a shared physics world
 js/sim/playback.js          playback of recorded creatures
 js/render/decorations.js    the vector drawings of all decorations
 js/render/renderer.js       the canvas 2D renderer and the editor/simulation camera
 js/ui/app.js                screens, widgets, modals, storage and the home/creature/settings/help screens
 js/ui/editor.js             the creature editor
 js/ui/simulation.js         the simulation screen (HUD, playback, save/load)
+js/ui/ecosystem.js           resident selection and shared-world ecosystem controls
 js/ui/gallery.js            the recording gallery
 js/boot.js                  startup and error handling
 ```
@@ -145,12 +156,25 @@ js/boot.js                  startup and error handling
   is the joint weight, bones are hinge constraints between two joints, muscles are spring constraints
   between two bones that can additionally contract or expand with a force proportional to the muscle
   strength. Wing bones add a lift force depending on the bone's rotation and velocity. A static
-  broad-phase grid keeps collisions between many creatures cheap, so a whole population can be
-  simulated in one world (also in visible batches).
+  broad-phase grid accelerates scene-geometry contacts; ecosystem mode also resolves cross-creature
+  joint contacts so residents can share the same world.
 * **Fitness**: the objective trackers match the original formulas, including the per-joint ground
   contact penalties, so the values are comparable to the Unity version.
 * **Recordings**: 30 samples per second of joint positions and muscle forces, played back with
   interpolation.
+
+---
+
+## Regression diagnostics
+
+Run the dependency-free checks with Node.js:
+
+```sh
+for test in tests/*.js; do node "$test"; done
+```
+
+The suite includes scratch-built editor-to-simulation scenarios, evolved-creature saving, ecosystem
+selection and shared physics, floor friction, simulation playback, and mobile/touch layout checks.
 
 ---
 

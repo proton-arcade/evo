@@ -45,11 +45,16 @@
       this.playback = null;
       this.playbackTime = 0;
       this.playbackPlaying = true;
+      this.playbackFinished = false;
       this.playbackDuration = 0;
+      this.playbackScene = null;
+      this.playbackGeneration = null;
+      this.playbackObjective = this.settings.Objective;
       this.waitTimer = 0;
       this.ghost = null;
       this.ghostTime = 0;
       this.recording = null;
+      this.evolvedChromosome = null;
       this.awaitingPlayback = false;
       this.dragging = null;
       this.activePointerId = null;
@@ -57,6 +62,7 @@
       this.frameCount = 0;
       this.settingsVisible = false;
       this.autoSaveGeneration = 0;
+      this.pendingAutosaveGeneration = null;
 
       this.createCameras();
       this.buildLayout();
@@ -72,11 +78,70 @@
         this.animationFrame = null;
       }
       this.detachEvents();
+      this.flushPendingAutosave();
       if (this.evolution) {
         this.evolution.finish();
       }
       this.saveStateToSettings();
+
+      // Screens are singletons in the app registry. Drop the finished run and
+      // its recording buffers rather than keeping them alive after navigation.
+      this.evolution = null;
+      this.data = null;
+      this.recording = null;
+      this.evolvedChromosome = null;
+      this.playback = null;
+      this.ghost = null;
+      this.playbackScene = null;
+      this.playbackTarget = null;
+      if (this.trackedCamera) {
+        this.trackedCamera.target = null;
+        this.trackedCamera.controlPoints = [];
+      }
+      [
+        'canvasContainer',
+        'canvas',
+        'fileInput',
+        'generationLabel',
+        'taskLabel',
+        'fitnessLabel',
+        'phaseLabel',
+        'timeLabel',
+        'previousCreatureButton',
+        'creatureLabel',
+        'nextCreatureButton',
+        'autoplayToggle',
+        'durationSlider',
+        'durationValue',
+        'pauseButton',
+        'thumbnailCanvas',
+        'thumbnailCaption',
+        'statsPanel',
+        'statsList',
+        'playbackBar',
+        'playButton',
+        'seekSlider',
+        'seekLabel',
+        'recordingLabel',
+        'saveCreatureButton',
+        'saveRecordingButton',
+        'nextButton',
+        'speedLabel',
+        'settingsDrawer',
+        'simulationSettingsPanel',
+        'settingsButton',
+      ].forEach(function (property) {
+        this[property] = null;
+      }, this);
     },
+
+    flushPendingAutosave: function () {
+      if (this.pendingAutosaveGeneration === null || this.pendingAutosaveGeneration === undefined) return;
+      var generation = this.pendingAutosaveGeneration;
+      this.pendingAutosaveGeneration = null;
+      this.autosave(generation);
+    },
+
 
     resize: function () {
       if (!this.canvas) return;
@@ -106,7 +171,11 @@
      * ================================================================ */
     prepareData: function (data) {
       if (data) {
-        return EVO.SimulationData.decode(EVO.SimulationData.encode(data));
+        var decoded = EVO.SimulationData.decode(EVO.SimulationData.encode(data));
+        if (!decoded.SceneDescription) {
+          decoded.SceneDescription = EVO.DefaultSimulationScenes.defaultSceneForObjective(decoded.Settings.Objective);
+        }
+        return decoded;
       }
       var settings = EVO.SimulationSettings.decode(Settings.SimulationSettings);
       var networkSettings = EVO.NeuralNetworkSettings.decode(Settings.NetworkSettings);
@@ -219,11 +288,14 @@
       this.durationValue = UI.el('span', 'hud-row-value', this.settings.SimulationTime + 'S');
       this.durationSlider.addEventListener('input', function () {
         self.settings.SimulationTime = parseFloat(self.durationSlider.value);
-        self.evolution.SettingsForNextGeneration.SimulationTime = self.settings.SimulationTime;
-        self.settings = self.evolution.Settings; // keep the reference in sync
-        self.durationValue.textContent = self.settings.SimulationTime + 'S';
-        self.timeLabel.textContent =
-          self.formatTime(self.batchElapsed()) + ' / ' + self.settings.SimulationTime + 's';
+        if (self.evolution) {
+          self.evolution.SettingsForNextGeneration.SimulationTime = self.settings.SimulationTime;
+          if (self.evolution.playbackPending) self.evolution.reconfigurePendingGeneration();
+        }
+        if (self.simulationSettingsPanel && self.simulationSettingsPanel.setSimulationTime) {
+          self.simulationSettingsPanel.setSimulationTime(self.settings.SimulationTime);
+        }
+        self.refreshHud();
         self.saveStateToSettings();
       });
       durationRow.appendChild(this.durationSlider);
@@ -231,15 +303,26 @@
       topLeft.appendChild(durationRow);
       element.appendChild(topLeft);
 
-      /* --- Top right: thumbnail + buttons --- */
+      /* --- Top right: simulation controls + thumbnail + buttons --- */
       var topRight = UI.el('div', 'hud hud-top-right');
+      var topControls = UI.el('div', 'hud-top-controls');
+      this.pauseButton = UI.el('button', 'evo-button small simulation-pause-button', 'Pause');
+      this.pauseButton.type = 'button';
+      this.pauseButton.title = 'Pause the simulation';
+      this.pauseButton.setAttribute('aria-label', 'Pause simulation');
+      this.pauseButton.addEventListener('click', function () {
+        self.pauseSimulation();
+      });
+      topControls.appendChild(this.pauseButton);
+
       var exitButton = UI.el('button', 'evo-button small', 'Exit');
       exitButton.title = 'Exit the simulation and return to the home screen';
       exitButton.setAttribute('aria-label', 'Exit simulation');
       exitButton.addEventListener('click', function () {
         self.exitSimulation();
       });
-      topRight.appendChild(exitButton);
+      topControls.appendChild(exitButton);
+      topRight.appendChild(topControls);
 
       var frame = UI.el('div', 'thumbnail-frame');
       this.thumbnailCanvas = UI.el('canvas', 'thumbnail-canvas');
@@ -275,7 +358,7 @@
               className: 'small',
             },
             {
-              label: 'Save',
+              label: 'Save run',
               onClick: function () {
                 self.showSaveMenu();
               },
@@ -319,6 +402,8 @@
       this.seekSlider.addEventListener('input', function () {
         if (!self.playback) return;
         self.playbackPlaying = false;
+        self.playbackFinished = false;
+        self.waitTimer = 0;
         self.playbackTime = parseFloat(self.seekSlider.value) * self.playbackDuration;
         self.playback.seek(self.playbackTime);
         self.refreshHud();
@@ -331,7 +416,15 @@
       this.recordingLabel = UI.el('span', 'hud-recording-label', '');
       this.playbackBar.appendChild(this.recordingLabel);
 
-      this.saveRecordingButton = UI.el('button', 'hud-button', 'SAVE');
+      this.saveCreatureButton = UI.el('button', 'hud-button primary', 'SAVE CREATURE');
+      this.saveCreatureButton.title = 'Save this evolved creature and its brain to My Creatures';
+      this.saveCreatureButton.addEventListener('click', function () {
+        self.saveEvolvedCreature();
+      });
+      this.playbackBar.appendChild(this.saveCreatureButton);
+
+      this.saveRecordingButton = UI.el('button', 'hud-button', 'SAVE REPLAY');
+      this.saveRecordingButton.title = 'Save this movement recording to the Gallery';
       this.saveRecordingButton.addEventListener('click', function () {
         self.saveRecording();
       });
@@ -365,6 +458,19 @@
       this.refreshHud();
     },
 
+    refreshSimulationPauseButton: function () {
+      var button = this.pauseButton;
+      if (!button) return;
+
+      var available = this.state === 'simulating' && !!this.evolution;
+      var paused = available && !!this.evolution.paused;
+      button.classList.toggle('hidden', !available);
+      button.classList.toggle('primary', paused);
+      button.textContent = paused ? 'Resume' : 'Pause';
+      button.title = paused ? 'Resume the simulation' : 'Pause the simulation';
+      button.setAttribute('aria-label', paused ? 'Resume simulation' : 'Pause simulation');
+    },
+
     exitSimulation: function () {
       App.show('home');
     },
@@ -392,25 +498,24 @@
       var self = this;
       this.settingsDrawer = UI.el('div', 'settings-drawer hidden');
       this.settingsDrawer.appendChild(UI.el('div', 'drawer-title', 'Simulation settings'));
-      this.settingsDrawer.appendChild(
-        EVO.SimulationSettingsPanel.create(this.settings, this.networkSettings, function (settings, networkSettings) {
+      this.simulationSettingsPanel = EVO.SimulationSettingsPanel.create(
+        this.settings,
+        this.networkSettings,
+        function (settings, networkSettings) {
           self.settings = settings;
           self.networkSettings = networkSettings;
           if (self.evolution) {
             self.evolution.SettingsForNextGeneration = settings;
-            self.evolution.NetworkSettings = networkSettings;
-            self.evolution.data.Settings = settings;
-            self.evolution.data.NetworkSettings = networkSettings;
-            if (self.evolution.data.SceneDescription !== undefined) {
-              self.evolution.data.SceneDescription = EVO.DefaultSimulationScenes.defaultSceneForObjective(
-                settings.Objective
-              );
-            }
+            self.evolution.NetworkSettingsForNextGeneration = networkSettings;
+            self.evolution.SceneDescriptionForNextGeneration =
+              EVO.DefaultSimulationScenes.defaultSceneForObjective(settings.Objective);
+            if (self.evolution.playbackPending) self.evolution.reconfigurePendingGeneration();
           }
           self.refreshHud();
           self.saveStateToSettings();
-        })
+        }
       );
+      this.settingsDrawer.appendChild(this.simulationSettingsPanel);
       this.settingsDrawer.appendChild(
         UI.el(
           'p',
@@ -451,6 +556,13 @@
           }
         },
       });
+      // The settings drawer was built just before the evolution engine. Keep
+      // its models as the editable next-generation settings, while the engine
+      // snapshots an independent active copy as soon as start() begins.
+      Object.assign(this.settings, this.evolution.SettingsForNextGeneration);
+      Object.assign(this.networkSettings, this.evolution.NetworkSettingsForNextGeneration);
+      this.evolution.SettingsForNextGeneration = this.settings;
+      this.evolution.NetworkSettingsForNextGeneration = this.networkSettings;
 
       this.evolution.start();
       this.refreshHud();
@@ -459,16 +571,26 @@
     onGenerationBegin: function (generation) {
       this.currentGeneration = generation;
       if (this.awaitingPlayback) {
-        // The playback of the previous generation is still running.
+        // The next population is already prepared, but playback remains visible.
         this.awaitingPlayback = false;
+        this.flushPendingAutosave();
         this.refreshHud();
         return;
       }
+      this.syncCameraControlPoints();
       this.state = 'simulating';
       this.playback = null;
       this.playbackPlaying = true;
       this.playbackTime = 0;
       this.refreshHud();
+    },
+
+    syncCameraControlPoints: function () {
+      if (!this.trackedCamera) return;
+      var description = this.evolution && this.evolution.SceneDescription;
+      this.trackedCamera.controlPoints =
+        description && description.CameraControlPoints ? description.CameraControlPoints : [];
+      this.trackedCamera.lastControlSegmentIndex = 0;
     },
 
     onBatchBegin: function () {
@@ -478,9 +600,18 @@
 
     onGenerationEnd: function (payload) {
       this.awaitingPlayback = true;
+      this.pendingAutosaveGeneration = payload.generation;
+      this.playbackGeneration = payload.generation;
+      // Rebuild a clean render scene from the completed generation's descriptor.
+      // The live scene may contain obstacles at their end-of-batch positions.
+      this.playbackScene = new EVO.Scene(new EVO.PhysicsWorld(), this.evolution.SceneDescription);
+      this.playbackObjective = this.evolution.Settings.Objective;
       this.evolution.pause();
       this.state = 'playback';
+      this.playbackFinished = false;
       this.recording = payload.recording;
+      this.evolvedChromosome =
+        payload.best && payload.best.chromosome ? payload.best.chromosome.slice() : null;
       this.bestStats = payload.best ? payload.best.stats : null;
 
       if (payload.recording) {
@@ -496,6 +627,9 @@
         this.playback.seek(0);
       } else {
         this.playback = null;
+        this.playbackPlaying = false;
+        this.playbackTime = 0;
+        this.playbackDuration = 0;
       }
 
       var generation = payload.generation;
@@ -504,7 +638,6 @@
         'GEN ' + generation + (this.bestStats ? ' · ' + percent(this.bestStats.fitness) : '');
       this.refreshHud();
       this.refreshStats();
-      this.autosave(generation);
 
       if (!this.playback) {
         // Nothing to play back — continue straight away.
@@ -528,6 +661,7 @@
       } else {
         if (this.playbackTime >= this.playbackDuration - 0.001) {
           this.playbackTime = 0;
+          this.playbackFinished = false;
         }
         this.playbackPlaying = true;
       }
@@ -537,8 +671,19 @@
     continueToNextGeneration: function () {
       this.waitTimer = 0;
       this.playbackPlaying = false;
+      this.playbackFinished = false;
+      this.playback = null;
+      this.playbackTarget = null;
+      this.playbackScene = null;
+      this.watchingIndex = 0;
       this.state = 'simulating';
-      this.evolution.resume();
+      this.syncCameraControlPoints();
+      this.resetCamera();
+      if (this.evolution) {
+        this.evolution.playbackPending = false;
+        this.evolution.completedSolutions = null;
+        this.evolution.resume();
+      }
       this.refreshHud();
     },
 
@@ -609,10 +754,11 @@
           if (this.playbackTime >= this.playbackDuration) {
             this.playbackTime = this.playbackDuration;
             this.playbackPlaying = false;
+            this.playbackFinished = true;
             this.waitTimer = this.autoplay ? 1.0 : 0;
           }
           this.playback.seek(this.playbackTime);
-        } else if (this.autoplay) {
+        } else if (this.playbackFinished && this.autoplay) {
           this.continueToNextGeneration();
         }
       }
@@ -628,8 +774,12 @@
 
       Renderer.drawBackground(ctx, this.camera);
 
+      var activeObjective =
+        this.state === 'playback'
+          ? this.playbackObjective
+          : this.evolution.Settings.Objective;
       var gridVisibility =
-        this.settings.Objective === EVO.Objective.Flying
+        activeObjective === EVO.Objective.Flying
           ? Settings.FlyingGridVisibility
           : Settings.DefaultGridVisibility;
       Renderer.drawGrid(ctx, this.camera, gridVisibility, Settings.GridSize || 1);
@@ -660,10 +810,13 @@
       this.camera.y = this.trackedCamera.y;
       this.camera.orthographicSize = this.trackedCamera.orthographicSize;
 
-      // Scene
-      if (this.evolution.scene) {
-        Renderer.drawScene(ctx, this.evolution.scene, this.camera);
-        Renderer.drawDistanceMarkers(ctx, this.evolution.scene, this.camera);
+      // Playback must keep the just-finished generation's scene visible; the
+      // evolution engine prepares the next scene while the recording plays.
+      var scene =
+        this.state === 'playback' && this.playbackScene ? this.playbackScene : this.evolution.scene;
+      if (scene) {
+        Renderer.drawScene(ctx, scene, this.camera);
+        Renderer.drawDistanceMarkers(ctx, scene, this.camera);
       }
 
       // Ghost of the previous generation's best creature
@@ -774,9 +927,17 @@
     refreshHud: function () {
       if (!this.generationLabel) return;
       var generation =
-        this.currentGeneration || (this.evolution ? this.evolution.currentGenerationNumber : 1);
+        this.state === 'playback' && this.playbackGeneration !== null
+          ? this.playbackGeneration
+          : this.currentGeneration || (this.evolution ? this.evolution.currentGenerationNumber : 1);
       this.generationLabel.textContent = 'GENERATION ' + generation;
-      this.taskLabel.textContent = objectiveName(this.settings.Objective);
+      var activeObjective =
+        this.state === 'playback'
+          ? this.playbackObjective
+          : this.evolution && this.evolution.Settings
+            ? this.evolution.Settings.Objective
+            : this.settings.Objective;
+      this.taskLabel.textContent = objectiveName(activeObjective);
 
       var fitness = this.currentFitness();
       this.fitnessLabel.textContent = 'FITNESS: ' + percent(fitness);
@@ -789,14 +950,26 @@
       } else {
         this.phaseLabel.textContent = 'SIMULATING';
       }
+      this.refreshSimulationPauseButton();
 
-      var inPlayback = this.state === 'playback' && !!this.playback;
+      var inPlayback = this.state === 'playback';
+      var hasRecording = inPlayback && !!this.playback;
       this.playbackBar.classList.toggle('hidden', !inPlayback);
-      if (inPlayback) {
+      this.playButton.classList.toggle('hidden', !hasRecording);
+      this.seekSlider.classList.toggle('hidden', !hasRecording);
+      this.seekLabel.classList.toggle('hidden', !hasRecording);
+      this.saveCreatureButton.classList.toggle('hidden', !hasRecording);
+      this.saveRecordingButton.classList.toggle('hidden', !hasRecording);
+      this.saveCreatureButton.disabled = !this.evolvedChromosome || !this.evolvedChromosome.length;
+      if (hasRecording) {
         this.playButton.textContent = this.playbackPlaying ? '\u2016' : '\u25B6';
         this.seekSlider.value = String(
           this.playbackDuration > 0 ? Utils.clamp(this.playbackTime / this.playbackDuration, 0, 1) : 0
         );
+      } else if (inPlayback) {
+        this.recordingLabel.textContent = 'GEN ' + generation + ' · NO RECORDING';
+      }
+      if (inPlayback) {
         var nextDisabled = this.autoplay && this.playbackPlaying;
         this.nextButton.classList.toggle('disabled', nextDisabled);
       }
@@ -813,24 +986,35 @@
       this.autoplayToggle.classList.toggle('active', this.autoplay);
       this.durationSlider.value = String(this.settings.SimulationTime);
       this.durationValue.textContent = this.settings.SimulationTime + 'S';
-      this.timeLabel.textContent =
-        this.formatTime(this.state === 'playback' ? this.playbackTime : this.batchElapsed()) +
-        ' / ' +
-        (this.state === 'playback' ? this.playbackDuration : this.settings.SimulationTime).toFixed(1) +
-        's';
+      var activeDuration = this.evolution && this.evolution.Settings
+        ? this.evolution.Settings.SimulationTime
+        : this.settings.SimulationTime;
+      if (this.state === 'playback' && !this.playback) {
+        this.timeLabel.textContent = 'NO RECORDING';
+      } else {
+        this.timeLabel.textContent =
+          this.formatTime(this.state === 'playback' ? this.playbackTime : this.batchElapsed()) +
+          ' / ' +
+          (this.state === 'playback' ? this.playbackDuration : activeDuration).toFixed(1) +
+          's';
+      }
     },
 
     refreshTimeLabels: function () {
       if (!this.timeLabel) return;
-      if (this.state === 'playback') {
+      if (this.state === 'playback' && this.playback) {
         this.timeLabel.textContent = this.formatTime(this.playbackTime) + ' / ' + this.playbackDuration.toFixed(1) + 's';
         this.seekLabel.textContent = this.formatTime(this.playbackTime);
         if (this.playbackDuration > 0) {
           this.seekSlider.value = String(Utils.clamp(this.playbackTime / this.playbackDuration, 0, 1));
         }
+      } else if (this.state === 'playback') {
+        this.timeLabel.textContent = 'NO RECORDING';
       } else {
-        this.timeLabel.textContent =
-          this.formatTime(this.batchElapsed()) + ' / ' + this.settings.SimulationTime + 's';
+        var activeDuration = this.evolution && this.evolution.Settings
+          ? this.evolution.Settings.SimulationTime
+          : this.settings.SimulationTime;
+        this.timeLabel.textContent = this.formatTime(this.batchElapsed()) + ' / ' + activeDuration + 's';
         var fitness = this.currentFitness();
         this.fitnessLabel.textContent = 'FITNESS: ' + percent(fitness);
       }
@@ -899,7 +1083,7 @@
       );
 
       Modal.open({
-        title: 'Save simulation',
+        title: 'Save evolution checkpoint',
         content: content,
         actions: [
           { label: 'Cancel' },
@@ -1024,6 +1208,24 @@
       reader.readAsText(file);
     },
 
+    saveEvolvedCreature: function () {
+      if (!this.recording || !this.evolvedChromosome || !this.evolvedChromosome.length) return;
+      try {
+        Storage.saveEvolvedCreature(
+          this.recording,
+          this.evolvedChromosome,
+          this.recording.networkSettings,
+          this.data ? this.data.LastV2SimulatedGeneration : 0
+        );
+        Modal.alert(
+          'The evolved creature and its ' + objectiveName(this.recording.task) + ' brain were saved to My Creatures.',
+          'Creature saved'
+        );
+      } catch (error) {
+        Modal.alert('The creature could not be saved: ' + error.message, 'Save failed');
+      }
+    },
+
     saveRecording: function () {
       if (!this.recording) return;
       try {
@@ -1078,7 +1280,7 @@
             self.resetCamera();
             break;
           case 'ArrowLeft':
-            if (self.playback) {
+            if (self.state === 'playback' && self.playback) {
               self.playbackTime = Math.max(0, self.playbackTime - 1);
               self.playback.seek(self.playbackTime);
             } else {
@@ -1086,7 +1288,7 @@
             }
             break;
           case 'ArrowRight':
-            if (self.playback) {
+            if (self.state === 'playback' && self.playback) {
               self.playbackTime = Math.min(self.playbackDuration, self.playbackTime + 1);
               self.playback.seek(self.playbackTime);
             } else {

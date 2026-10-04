@@ -22,6 +22,10 @@
   var PHYSICS_SUBSTEPS = 3;
   var PHYSICS_ITERATIONS = 4;
 
+  function cloneNetworkSettings(settings) {
+    return EVO.NeuralNetworkSettings.decode(EVO.NeuralNetworkSettings.encode(settings));
+  }
+
   /**
    * @param options.data        The SimulationData (settings, design, chromosomes)
    * @param options.onEvent     Optional callback (name, payload)
@@ -32,8 +36,17 @@
     this.onEvent = options.onEvent || function () {};
 
     this.Settings = this.data.Settings;
-    this.NetworkSettings = this.data.NetworkSettings;
+    this.NetworkSettings = this.data.NetworkSettings || EVO.NeuralNetworkSettings.defaultSettings();
     this.SettingsForNextGeneration = Object.assign({}, this.data.Settings);
+    this.NetworkSettingsForNextGeneration = cloneNetworkSettings(this.NetworkSettings);
+    this.SceneDescription = this.data.SceneDescription;
+    if (!this.SceneDescription) {
+      this.SceneDescription = EVO.DefaultSimulationScenes.defaultSceneForObjective(this.Settings.Objective);
+      this.data.SceneDescription = this.SceneDescription;
+    }
+    this.SceneDescriptionForNextGeneration = this.SceneDescription;
+    this.playbackPending = false;
+    this.completedSolutions = null;
 
     this.currentGenerationNumber = this.data.BestCreatures.length + 1;
     this.currentBatchNumber = 1;
@@ -67,6 +80,8 @@
     this.generationFitness = [];
     this.state = 'idle';
     this.paused = false;
+    this.playbackPending = false;
+    this.completedSolutions = null;
     this.isRunning = true;
     this.onEvent('initializationDidEnd');
     this.beginGeneration();
@@ -74,6 +89,8 @@
 
   Evolution.prototype.finish = function () {
     this.isRunning = false;
+    this.playbackPending = false;
+    this.completedSolutions = null;
     this.teardownBatch();
   };
 
@@ -83,14 +100,24 @@
 
   Evolution.prototype.resume = function () {
     this.paused = false;
+    if (this.playbackPending) {
+      this.playbackPending = false;
+      this.completedSolutions = null;
+    }
   };
 
   /* ------------------------------------------------------------------ *
    * Generation / batch lifecycle
    * ------------------------------------------------------------------ */
-  Evolution.prototype.beginGeneration = function () {
+  Evolution.prototype.beginGeneration = function (suppressEvents) {
     this.Settings = Object.assign({}, this.SettingsForNextGeneration);
+    this.NetworkSettings = cloneNetworkSettings(this.NetworkSettingsForNextGeneration);
+    this.SceneDescription =
+      this.SceneDescriptionForNextGeneration ||
+      EVO.DefaultSimulationScenes.defaultSceneForObjective(this.Settings.Objective);
     this.data.Settings = this.Settings;
+    this.data.NetworkSettings = this.NetworkSettings;
+    this.data.SceneDescription = this.SceneDescription;
 
     var populationSize = this.Settings.PopulationSize;
     this.solutions = new Array(populationSize);
@@ -124,11 +151,28 @@
       }
     }
 
-    this.onEvent('newGenerationDidBegin', this.currentGenerationNumber);
-    this.beginBatch();
+    if (!suppressEvents) this.onEvent('newGenerationDidBegin', this.currentGenerationNumber);
+    this.beginBatch(suppressEvents);
   };
 
-  Evolution.prototype.beginBatch = function () {
+  /** Rebuilds the prepared next generation while its previous replay is showing. */
+  Evolution.prototype.reconfigurePendingGeneration = function () {
+    if (!this.isRunning || !this.paused || !this.playbackPending || !this.completedSolutions) {
+      return false;
+    }
+    var nextSettings = this.SettingsForNextGeneration;
+    this.data.CurrentChromosomes = this.createNewChromosomes(
+      nextSettings.PopulationSize,
+      this.completedSolutions,
+      nextSettings.KeepBestCreatures,
+      nextSettings
+    );
+    this.state = 'idle';
+    this.beginGeneration(true);
+    return true;
+  };
+
+  Evolution.prototype.beginBatch = function (suppressEvents) {
     this.teardownBatch();
 
     var remainingCreatures =
@@ -137,7 +181,7 @@
     this.currentBatchSize = currentBatchSize;
 
     this.world = new EVO.PhysicsWorld();
-    this.scene = new EVO.Scene(this.world, this.data.SceneDescription);
+    this.scene = new EVO.Scene(this.world, this.SceneDescription);
 
     var batch = [];
     for (var i = 0; i < currentBatchSize; i++) {
@@ -198,15 +242,17 @@
     this.accumulator = 0;
     this.tickCount = 0;
 
-    this.onEvent('newBatchDidBegin', {
-      generation: this.currentGenerationNumber,
-      batch: this.currentBatchNumber,
-      batchCount: this.numberOfBatches,
-    });
+    if (!suppressEvents) {
+      this.onEvent('newBatchDidBegin', {
+        generation: this.currentGenerationNumber,
+        batch: this.currentBatchNumber,
+        batchCount: this.numberOfBatches,
+      });
+    }
   };
 
   Evolution.prototype.placeCreatures = function (batch) {
-    var dropHeight = this.data.SceneDescription.DropHeight;
+    var dropHeight = this.SceneDescription.DropHeight;
     var sceneContainsStairs = this.Settings.Objective === EVO.Objective.Climbing;
 
     for (var i = 0; i < batch.length; i++) {
@@ -393,7 +439,7 @@
     if (movementData) {
       recording = EVO.CreatureRecording.create(
         EVO.CreatureDesign.clone(this.data.CreatureDesign),
-        this.data.SceneDescription,
+        this.SceneDescription,
         movementData,
         this.Settings.Objective,
         this.currentGenerationNumber,
@@ -406,23 +452,30 @@
       this.generationFitness.push(best.stats.unclampedFitness);
     }
 
+    // Keep the evaluated population until playback ends: the pending next
+    // generation can be rebuilt if the user changes its settings during replay.
+    this.completedSolutions = solutions.slice();
+    this.playbackPending = true;
     this.onEvent('generationDidEnd', {
       generation: this.currentGenerationNumber,
       best: best,
       recording: recording,
     });
 
+    var nextSettings = this.SettingsForNextGeneration;
     this.data.CurrentChromosomes = this.createNewChromosomes(
-      this.Settings.PopulationSize,
+      nextSettings.PopulationSize,
       solutions,
-      this.Settings.KeepBestCreatures
+      nextSettings.KeepBestCreatures,
+      nextSettings
     );
     this.currentGenerationNumber++;
     this.state = 'idle';
     this.beginGeneration();
   };
 
-  Evolution.prototype.createNewChromosomes = function (nextGenerationSize, solutions, keepBest) {
+  Evolution.prototype.createNewChromosomes = function (nextGenerationSize, solutions, keepBest, settingsOverride) {
+    var settings = settingsOverride || this.Settings;
     var result = new Array(nextGenerationSize);
 
     var lazyChromosomes = solutions.map(function (solution) {
@@ -435,7 +488,7 @@
       };
     });
 
-    var selection = new EVO.Selection(this.Settings.SelectionAlgorithm, lazyChromosomes);
+    var selection = new EVO.Selection(settings.SelectionAlgorithm, lazyChromosomes);
 
     var start = 0;
     if (keepBest && lazyChromosomes.length >= 2) {
@@ -464,22 +517,23 @@
         parent1.chromosome,
         parent2.chromosome,
         recombinationResult,
-        this.Settings.RecombinationAlgorithm
+        settings.RecombinationAlgorithm
       );
 
-      result[i] = this.mutated(recombinationResult[0]);
+      result[i] = this.mutated(recombinationResult[0], settings);
       if (i + 1 < result.length) {
-        result[i + 1] = this.mutated(recombinationResult[1]);
+        result[i + 1] = this.mutated(recombinationResult[1], settings);
       }
     }
 
     return result;
   };
 
-  Evolution.prototype.mutated = function (chromosome) {
-    var shouldMutate = Utils.randomRange(0, 100) < this.Settings.MutationRate * 100;
+  Evolution.prototype.mutated = function (chromosome, settingsOverride) {
+    var settings = settingsOverride || this.Settings;
+    var shouldMutate = Utils.randomRange(0, 100) < settings.MutationRate * 100;
     if (!shouldMutate) return chromosome.slice();
-    return EVO.Mutation.mutate(chromosome.slice(), this.Settings.MutationAlgorithm);
+    return EVO.Mutation.mutate(chromosome.slice(), settings.MutationAlgorithm);
   };
 
   Evolution.prototype.getNumberOfCurrentBrainInputs = function () {

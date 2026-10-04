@@ -74,14 +74,20 @@
   /* ------------------------------------------------------------------ *
    * Joints
    * ------------------------------------------------------------------ */
-  CreatureBuilder.prototype.tryPlacingJoint = function (position) {
-    // Make sure the joint doesn't overlap another one.
+  CreatureBuilder.prototype.jointPositionIsClear = function (position, ignoredJoints) {
     for (var i = 0; i < this.design.joints.length; i++) {
       var joint = this.design.joints[i];
+      if (ignoredJoints && ignoredJoints.indexOf(joint) !== -1) continue;
       if (Utils.distance(joint.x, joint.y, position.x, position.y) < JOINT_NON_OVERLAP_RADIUS) {
         return false;
       }
     }
+    return true;
+  };
+
+  CreatureBuilder.prototype.tryPlacingJoint = function (position) {
+    // Make sure the joint doesn't overlap another one.
+    if (!this.jointPositionIsClear(position)) return false;
     this.design.joints.push(
       EVO.JointData.create(this.idCounter++, { x: position.x, y: position.y }, 1, 0)
     );
@@ -91,24 +97,39 @@
   /** Moves a joint. Returns the ids of the components that changed. */
   CreatureBuilder.prototype.moveJoint = function (id, position) {
     var joint = this.findJoint(id);
-    if (!joint) return false;
+    if (!joint || !this.jointPositionIsClear(position, [joint])) return false;
     joint.x = position.x;
     joint.y = position.y;
     return true;
   };
 
   CreatureBuilder.prototype.moveJoints = function (ids, delta) {
-    var self = this;
-    var moved = false;
-    ids.forEach(function (id) {
-      var joint = self.findJoint(id);
-      if (joint) {
-        joint.x += delta.x;
-        joint.y += delta.y;
-        moved = true;
+    var movingJoints = [];
+    for (var i = 0; i < ids.length; i++) {
+      var joint = this.findJoint(ids[i]);
+      if (joint && movingJoints.indexOf(joint) === -1) movingJoints.push(joint);
+    }
+    if (!movingJoints.length) return false;
+
+    // Validate the whole translation before applying it so connected bones
+    // cannot drag joints into another component or leave a partial move.
+    for (var m = 0; m < movingJoints.length; m++) {
+      var moving = movingJoints[m];
+      if (
+        !this.jointPositionIsClear(
+          { x: moving.x + delta.x, y: moving.y + delta.y },
+          movingJoints
+        )
+      ) {
+        return false;
       }
+    }
+
+    movingJoints.forEach(function (joint) {
+      joint.x += delta.x;
+      joint.y += delta.y;
     });
-    return moved;
+    return true;
   };
 
   CreatureBuilder.prototype.setJointWeight = function (id, weight) {
@@ -140,7 +161,7 @@
 
   CreatureBuilder.prototype.updateCurrentBoneEnd = function (jointId) {
     if (!this.currentBone) return false;
-    if (jointId && jointId !== this.currentBone.startJointID) {
+    if (jointId !== null && jointId !== undefined && jointId !== this.currentBone.startJointID) {
       this.currentBone.endJointID = jointId;
       return true;
     }
@@ -219,7 +240,7 @@
 
   CreatureBuilder.prototype.updateCurrentMuscleEnd = function (boneId) {
     if (!this.currentMuscle) return false;
-    if (boneId && boneId !== this.currentMuscle.startBoneID) {
+    if (boneId !== null && boneId !== undefined && boneId !== this.currentMuscle.startBoneID) {
       this.currentMuscle.endBoneID = boneId;
       return true;
     }

@@ -407,6 +407,14 @@
       ctx.save();
       ctx.globalAlpha = opacity;
 
+      // Match the live creature's draw order so custom cosmetics remain visible
+      // in both simulation playback and the gallery.
+      if (playback.decorations) {
+        for (var d = 0; d < playback.decorations.length; d++) {
+          this.drawDecoration(ctx, playback.decorations[d], camera, opacity);
+        }
+      }
+
       // Muscles
       if (playback.muscles && options.showMuscles !== false) {
         for (var m = 0; m < playback.muscles.length; m++) {
