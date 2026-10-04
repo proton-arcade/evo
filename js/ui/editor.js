@@ -57,6 +57,10 @@
       this.selection = null; // {type, id}
       this.pending = null; // {kind: 'bone'|'muscle', startId}
       this.drag = null;
+      this.isPointerDown = false;
+      this.activePointerId = null;
+      this.deferredTap = null;
+      this.gestures = null;
       this.decorationType = EVO.DecorationType.GooglyEye;
       this.camera = new EVO.Camera({ orthographicSize: 10 });
       this.pointerPosition = { x: 0, y: 0 };
@@ -284,7 +288,7 @@
       var container = this.canvasContainer;
       var width = container.clientWidth || 800;
       var height = container.clientHeight || 600;
-      var ratio = global.devicePixelRatio || 1;
+      var ratio = Utils.displayPixelRatio ? Utils.displayPixelRatio() : Math.min(global.devicePixelRatio || 1, 2);
       this.canvas.width = Math.floor(width * ratio);
       this.canvas.height = Math.floor(height * ratio);
       this.canvas.style.width = width + 'px';
@@ -330,6 +334,15 @@
       this.onPointerUp = function (event) {
         self.handlePointerUp(event);
       };
+      this.onPointerCancel = function (event) {
+        self.cancelPointerAction(event);
+      };
+      this.onBlur = function (event) {
+        self.cancelPointerAction(event, true);
+      };
+      this.onVisibilityChange = function () {
+        self.cancelPointerAction(null, true);
+      };
       this.onWheel = function (event) {
         event.preventDefault();
         var rect = self.canvas.getBoundingClientRect();
@@ -366,17 +379,53 @@
         }
       };
 
+      // Register gestures first so `active` is already true when the editor's
+      // pointerdown handler receives the second touch of a pinch.
+      this.gestures = Utils.addTouchGestures(this.canvas, {
+        onGestureStart: function () {
+          self.deferredTap = null;
+          self.finishDrag();
+          self.activePointerId = null;
+          self.isPointerDown = false;
+        },
+        onPinch: function (scale, cx, cy) {
+          self.camera.zoomAt(cx, cy, 1 / scale);
+          self.render();
+        },
+        onPan: function (dx, dy) {
+          self.camera.panByScreenDelta(dx, dy);
+          self.render();
+        },
+        onGestureEnd: function () {
+          // Do not turn the remaining finger of a finished gesture into a tap.
+          self.deferredTap = null;
+          self.activePointerId = null;
+          self.isPointerDown = false;
+          self.drag = null;
+        },
+      });
+
       this.canvas.addEventListener('pointerdown', this.onPointerDown);
       window.addEventListener('pointermove', this.onPointerMove);
       window.addEventListener('pointerup', this.onPointerUp);
+      window.addEventListener('pointercancel', this.onPointerCancel);
+      window.addEventListener('blur', this.onBlur);
+      document.addEventListener('visibilitychange', this.onVisibilityChange);
       this.canvas.addEventListener('wheel', this.onWheel, { passive: false });
       window.addEventListener('keydown', this.onKeyDown);
     },
 
     detachEvents: function () {
+      if (this.gestures) {
+        this.gestures.detach();
+        this.gestures = null;
+      }
       this.canvas.removeEventListener('pointerdown', this.onPointerDown);
       window.removeEventListener('pointermove', this.onPointerMove);
       window.removeEventListener('pointerup', this.onPointerUp);
+      window.removeEventListener('pointercancel', this.onPointerCancel);
+      window.removeEventListener('blur', this.onBlur);
+      document.removeEventListener('visibilitychange', this.onVisibilityChange);
       this.canvas.removeEventListener('wheel', this.onWheel);
       window.removeEventListener('keydown', this.onKeyDown);
     },
@@ -386,32 +435,86 @@
       return this.camera.screenToWorld(event.clientX - rect.left, event.clientY - rect.top);
     },
 
+    isTouchEvent: function (event) {
+      return !!(event && event.pointerType === 'touch');
+    },
+
+    /**
+     * Releases over another control should not count as a canvas tap. Releasing
+     * on the canvas, its ancestors, or the document/window is still accepted so
+     * an ordinary drag can end just outside the canvas edge.
+     */
+    releaseBelongsToCanvas: function (event) {
+      var target = event && event.target;
+      if (
+        !target ||
+        target === global ||
+        target === document ||
+        target === document.documentElement ||
+        target === document.body
+      ) {
+        return true;
+      }
+      var node = this.canvas;
+      while (node) {
+        if (node === target) return true;
+        node = node.parentNode;
+      }
+      return false;
+    },
+
     handlePointerDown: function (event) {
+      // The gesture listener was registered first. Do not let the second finger
+      // start an edit after the recognizer has promoted the interaction to a pinch.
+      if (this.gestures && this.gestures.active) return;
+
       var point = this.pointerWorld(event);
       this.pointerPosition = point;
-      var snapped = this.snap(point);
+      this.activePointerId = event.pointerId === undefined ? null : event.pointerId;
       this.isPointerDown = true;
       this.lastPointer = { x: event.clientX, y: event.clientY };
+      this.drag = null;
+
+      if (this.isTouchEvent(event)) {
+        // Wait until lift to apply a tap tool. If another finger arrives first,
+        // the gesture-start callback cancels this record before it can edit.
+        this.deferredTap = { point: { x: point.x, y: point.y } };
+        if (this.tool === Tools.SELECT) this.beginSelection(point);
+        return;
+      }
+
+      this.deferredTap = null;
+      if (this.tool === Tools.SELECT) this.beginSelection(point);
+      else this.applyToolAt(point, this.snap(point));
+    },
+
+    beginSelection: function (point) {
+      var hit = this.builder.hitTest(point, this.hitTolerance());
+      if (hit) {
+        this.selection = hit;
+        this.drag = {
+          kind: hit.type,
+          id: hit.id,
+          startPoint: point,
+          original: this.snapshot(),
+          moved: false,
+        };
+        this.refreshSettings();
+        this.render();
+      } else {
+        this.selection = null;
+        this.drag = { kind: 'pan' };
+        this.refreshSettings();
+        this.render();
+      }
+    },
+
+    applyToolAt: function (point, snapped) {
+      var self = this;
+      snapped = snapped || this.snap(point);
 
       if (this.tool === Tools.SELECT) {
-        var hit = this.builder.hitTest(point, this.hitTolerance());
-        if (hit) {
-          this.selection = hit;
-          this.drag = {
-            kind: hit.type,
-            id: hit.id,
-            startPoint: point,
-            original: this.snapshot(),
-            moved: false,
-          };
-          this.refreshSettings();
-          this.render();
-        } else {
-          this.selection = null;
-          this.drag = { kind: 'pan' };
-          this.refreshSettings();
-          this.render();
-        }
+        this.beginSelection(point);
         return;
       }
 
@@ -502,7 +605,73 @@
       }
     },
 
+    finishDrag: function () {
+      if (this.drag && this.drag.kind !== 'pan' && this.drag.moved) {
+        // Record the state before and after the drag so that it can be undone.
+        var current = this.snapshot();
+        if (JSON.stringify(this.drag.original) !== JSON.stringify(current)) {
+          var historyEntry = JSON.stringify(EVO.CreatureDesign.decode(this.history.entries[this.history.index]));
+          if (historyEntry !== JSON.stringify(this.drag.original)) {
+            this.history.entries = this.history.entries.slice(0, this.history.index + 1);
+            this.history.entries.push(JSON.parse(JSON.stringify(this.drag.original)));
+            this.history.index = this.history.entries.length - 1;
+          }
+          this.history.push(this.builder.design);
+          App.setDesign(this.builder.design);
+        }
+      }
+      this.isPointerDown = false;
+      this.activePointerId = null;
+      this.drag = null;
+    },
+
+    cancelPointerAction: function (event, force) {
+      if (
+        !force &&
+        event &&
+        this.activePointerId !== null &&
+        event.pointerId !== undefined &&
+        event.pointerId !== this.activePointerId
+      ) {
+        return;
+      }
+      if (this.drag && this.drag.moved && this.drag.kind !== 'pan' && this.drag.original) {
+        this.restoreSnapshot(this.drag.original);
+        this.render();
+      }
+      this.deferredTap = null;
+      this.isPointerDown = false;
+      this.activePointerId = null;
+      this.drag = null;
+    },
+
+    handlePointerUp: function (event) {
+      if (this.activePointerId === null || event.pointerId !== this.activePointerId) return;
+      if (!this.releaseBelongsToCanvas(event)) {
+        this.cancelPointerAction(null, true);
+        return;
+      }
+
+      if (this.deferredTap && this.tool !== Tools.SELECT) {
+        var point = this.deferredTap.point;
+        if (
+          typeof event.clientX === 'number' &&
+          isFinite(event.clientX) &&
+          typeof event.clientY === 'number' &&
+          isFinite(event.clientY)
+        ) {
+          point = this.pointerWorld(event);
+        }
+        this.pointerPosition = point;
+        this.applyToolAt(point, this.snap(point));
+      }
+      this.deferredTap = null;
+      this.finishDrag();
+    },
+
     handlePointerMove: function (event) {
+      if (this.activePointerId !== null && event.pointerId !== this.activePointerId) return;
+      if (this.gestures && this.gestures.active) return;
       var point = this.pointerWorld(event);
       this.pointerPosition = point;
 
@@ -564,25 +733,6 @@
       if (this.pending) {
         this.render();
       }
-    },
-
-    handlePointerUp: function () {
-      if (this.drag && this.drag.kind !== 'pan' && this.drag.moved) {
-        // Record the state before and after the drag so that it can be undone.
-        var current = this.snapshot();
-        if (JSON.stringify(this.drag.original) !== JSON.stringify(current)) {
-          var historyEntry = JSON.stringify(EVO.CreatureDesign.decode(this.history.entries[this.history.index]));
-          if (historyEntry !== JSON.stringify(this.drag.original)) {
-            this.history.entries = this.history.entries.slice(0, this.history.index + 1);
-            this.history.entries.push(JSON.parse(JSON.stringify(this.drag.original)));
-            this.history.index = this.history.entries.length - 1;
-          }
-          this.history.push(this.builder.design);
-          App.setDesign(this.builder.design);
-        }
-      }
-      this.isPointerDown = false;
-      this.drag = null;
     },
 
     /* --- editing helpers --------------------------------------------- */
@@ -1198,20 +1348,30 @@
     },
 
     toolHint: function () {
+      var hint;
       switch (this.tool) {
         case Tools.JOINT:
-          return 'Tap to place a joint. Joints cannot be placed too close to each other.';
+          hint = 'Tap to place a joint. Joints cannot be placed too close to each other.';
+          break;
         case Tools.BONE:
-          return 'Tap one joint and then another to connect them with a bone (or drag from one to the other).';
+          hint = 'Tap one joint and then another to connect them with a bone (or drag from one to the other).';
+          break;
         case Tools.MUSCLE:
-          return 'Tap one bone and then another to connect them with a muscle.';
+          hint = 'Tap one bone and then another to connect them with a muscle.';
+          break;
         case Tools.DECORATION:
-          return 'Tap a bone to attach the selected decoration to it.';
+          hint = 'Tap a bone to attach the selected decoration to it.';
+          break;
         case Tools.ERASE:
-          return 'Tap a joint, bone, muscle or decoration to delete it.';
+          hint = 'Tap a joint, bone, muscle or decoration to delete it.';
+          break;
         default:
-          return 'Select a component to edit its properties. Drag joints and bones to move them, drag empty space to pan.';
+          hint = 'Select a component to edit its properties. Drag joints and bones to move them, drag empty space to pan.';
       }
+      if (Utils.hasTouchScreen && Utils.hasTouchScreen()) {
+        hint += ' Two fingers pan and zoom the view.';
+      }
+      return hint;
     },
 
     /* --- rendering ---------------------------------------------------- */

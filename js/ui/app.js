@@ -414,8 +414,30 @@
         this.root = document.body;
       }
       this.show('home');
-      window.addEventListener('resize', function () {
+      var resizeCurrent = function () {
         if (App.current && App.current.resize) App.current.resize();
+      };
+      window.addEventListener('resize', resizeCurrent);
+      window.addEventListener('orientationchange', function () {
+        resizeCurrent();
+        if (App.orientationResizeTimer) clearTimeout(App.orientationResizeTimer);
+        App.orientationResizeTimer = setTimeout(resizeCurrent, 250);
+      });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', resizeCurrent);
+      }
+      document.addEventListener('contextmenu', function (event) {
+        var target = event.target;
+        if (
+          target &&
+          target.tagName === 'CANVAS' &&
+          target.classList &&
+          (target.classList.contains('editor-canvas') ||
+            target.classList.contains('simulation-canvas') ||
+            target.classList.contains('gallery-canvas'))
+        ) {
+          event.preventDefault();
+        }
       });
       document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape' && Modal.root) {
@@ -906,11 +928,12 @@
             'controlled together).',
         },
         {
-          title: 'Keyboard and mouse',
+          title: 'Keyboard, mouse and touch',
           body:
             'Drag with the left mouse button to pan, use the scroll wheel or a pinch gesture to zoom. ' +
-            'In the editor, drag from one joint to another to create a bone and from one bone to another to ' +
-            'create a muscle. The space bar pauses the simulation.',
+            'On touch screens, drag with one finger to pan and use two fingers to pan and zoom. In the editor, ' +
+            'drag from one joint to another to create a bone and from one bone to another to create a muscle. ' +
+            'The space bar pauses the simulation.',
         },
         {
           title: 'Gallery',
