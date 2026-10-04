@@ -81,6 +81,11 @@
   Creature.WING_FLAP_LIFT_COEFFICIENT = 0.75;
   Creature.WING_MAX_FORCE = 1800;
   Creature.WING_MIN_SPEED = 0.1;
+  // Muscles attach to the centre of the simplified two-point bones. Give a
+  // wing-connected muscle a bounded opposing endpoint force as well, so it
+  // can actually rotate the wing through a powered downstroke/upstroke.
+  Creature.WING_STROKE_TORQUE_SCALE = 0.08;
+  Creature.WING_MAX_STROKE_FORCE = 220;
   Creature.WING_AERO_CENTER_FRACTION = 0.72;
   Creature.WING_MAX_ANGLE_OF_ATTACK = 80 * Utils.Deg2Rad;
   Creature.MuscleAction = MuscleAction;
@@ -154,6 +159,9 @@
         center: { x: 0, y: 0 },
         angle: 0,
         angularVelocity: 0,
+        // A contracted muscle drives its wing tip downward regardless of
+        // whether the designer drew the wing to the left or right of its root.
+        strokeTangentSign: endJoint.body.x < startJoint.body.x ? 1 : -1,
         connectedMuscles: [],
       };
       self.bones.push(bone);
@@ -335,6 +343,7 @@
 
     for (var b = 0; b < this.bones.length; b++) {
       if (this.bones[b].isWing) {
+        this.applyWingStrokeTorque(this.bones[b]);
         this.applyWingForce(this.bones[b]);
       }
     }
@@ -385,6 +394,50 @@
   };
 
   /**
+   * Turns the action of muscles attached to a wing into a bounded internal
+   * torque. The base muscle force is applied at bone centres, which is
+   * deliberately torque-free in this two-point solver; without this endpoint
+   * pair a marked wing can remain almost motionless even while its muscle is
+   * firing. The equal-and-opposite forces add no free linear lift — lift still
+   * comes exclusively from `applyWingForce` once the wing moves through air.
+   */
+  Creature.prototype.applyWingStrokeTorque = function (bone) {
+    if (!bone.isWing || !bone.connectedMuscles || !bone.connectedMuscles.length) {
+      bone.wingStrokeForce = 0;
+      return;
+    }
+
+    var signedMuscleForce = 0;
+    for (var i = 0; i < bone.connectedMuscles.length; i++) {
+      var muscle = bone.connectedMuscles[i];
+      if (!muscle || !muscle.living || !(muscle.currentForce > 0)) continue;
+      var direction = muscle.muscleAction === MuscleAction.EXPAND ? -1 : 1;
+      signedMuscleForce += direction * muscle.currentForce;
+    }
+    if (bone.inverted) signedMuscleForce *= -1;
+
+    var force = Utils.clamp(
+      signedMuscleForce * Creature.WING_STROKE_TORQUE_SCALE,
+      -Creature.WING_MAX_STROKE_FORCE,
+      Creature.WING_MAX_STROKE_FORCE
+    );
+    bone.wingStrokeForce = force;
+    if (Math.abs(force) < 1e-6) return;
+
+    // Tangent points counter-clockwise around the bone. `strokeTangentSign`
+    // gives a downward tip stroke for either a left- or right-facing wing.
+    var tangentX = -bone.direction.y;
+    var tangentY = bone.direction.x;
+    var directedForce = force * bone.strokeTangentSign;
+    var forceX = tangentX * directedForce;
+    var forceY = tangentY * directedForce;
+    bone.endJoint.body.fx += forceX;
+    bone.endJoint.body.fy += forceY;
+    bone.startJoint.body.fx -= forceX;
+    bone.startJoint.body.fy -= forceY;
+  };
+
+  /**
    * Applies a bounded game-scale aerodynamic force at a wing's aerodynamic
    * center. The endpoint average misses the velocity caused by flapping, so
    * the local point velocity includes omega × radius from the wing root.
@@ -429,6 +482,7 @@
         dragY: 0,
         forceX: 0,
         forceY: 0,
+        strokeForce: 0,
         activeStroke: false,
       };
     }
@@ -444,6 +498,7 @@
     debug.dragY = 0;
     debug.forceX = 0;
     debug.forceY = 0;
+    debug.strokeForce = bone.wingStrokeForce || 0;
     debug.activeStroke = false;
     if (speed < Creature.WING_MIN_SPEED) return;
 
@@ -880,7 +935,7 @@
 
   /** The currently active obstacle of the scene (used by the legacy brain). */
   Creature.prototype.getObstacle = function () {
-    return this.scene ? this.scene.getObstacle() : null;
+    return this.scene ? this.scene.getObstacle(this) : null;
   };
 
   Creature.prototype.getDistanceFromObstacle = function (obstacle) {

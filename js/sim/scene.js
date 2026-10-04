@@ -9,8 +9,8 @@
  * Every task has its own scene:
  *
  *   Running / Jumping / Flying  — a flat ground plane.
- *   Obstacle Jump               — a short course of fixed blocks that grow
- *                                 progressively taller and wider.
+ *   Obstacle Jump               — an endless course of blocks that grow
+ *                                 progressively taller and wider as it extends.
  *   Climbing                    — an infinite staircase at a 45° angle.
  */
 (function (global) {
@@ -206,8 +206,6 @@
 
     obstacleJumpScene: function () {
       var ground = structure(StructureType.Ground, 0.476771, -4.8, 1000, 9.56, 0);
-      var rightWall = structure(StructureType.Wall, 40, -4.8, 100, 35.78, 90);
-      var leftWall = structure(StructureType.Wall, -41.73, -4.8, 100, 35.78, 90);
       var blockCourse = structure(
         StructureType.ObstacleBlockSpawner,
         7,
@@ -216,7 +214,10 @@
         1,
         0,
         {
-          blockCount: 5,
+          // This is only the initial visible stretch. More blocks are added
+          // ahead of a moving creature, so there is no finish-line wall.
+          initialBlockCount: 5,
+          lookAheadBlocks: 3,
           blockSpacing: 6.2,
           startWidth: 1.2,
           widthIncrease: 0.22,
@@ -224,11 +225,7 @@
           heightIncrease: 0.42,
         }
       );
-      return SimulationSceneDescription.create(
-        [ground, leftWall, rightWall, blockCourse],
-        0.5,
-        FLAT_GROUND_CONTROL_POINTS
-      );
+      return SimulationSceneDescription.create([ground, blockCourse], 0.5, FLAT_GROUND_CONTROL_POINTS);
     },
 
     climbingScene: function () {
@@ -279,6 +276,7 @@
     this.renderables = [];
     this.distanceMarkers = [];
     this.blocks = [];
+    this.obstacleBlockCourses = [];
     this.obstacles = [];
     this.obstacleSpawners = [];
     this.spawnTimers = [];
@@ -387,37 +385,109 @@
     this.spawnTimers.push(0);
   };
 
-  /** Builds a static course whose blocks get a little larger as it progresses. */
+  /**
+   * Starts an obstacle course with a small visible stretch. Unlike the former
+   * fixed five-block course, this remembers its generation settings so it can
+   * keep adding blocks in front of a creature as it advances.
+   */
   Scene.prototype.buildObstacleBlockCourse = function (entry) {
     var transform = entry.transform;
     var params = entry.params || {};
-    var count = Utils.clamp(Math.round(params.blockCount === undefined ? 5 : params.blockCount), 1, 20);
-    var spacing = params.blockSpacing === undefined ? 6.2 : Math.max(1, params.blockSpacing);
-    var startWidth = params.startWidth === undefined ? 1.2 : Math.max(0.5, params.startWidth);
-    var widthIncrease = params.widthIncrease === undefined ? 0.22 : Math.max(0, params.widthIncrease);
-    var startHeight = params.startHeight === undefined ? 1.1 : Math.max(0.5, params.startHeight);
-    var heightIncrease = params.heightIncrease === undefined ? 0.42 : Math.max(0, params.heightIncrease);
+    var initialCount = params.initialBlockCount;
+    // `blockCount` was used by saved fixed-course scenes. Preserve it as the
+    // number of initial blocks, but never let it become the course's end.
+    if (initialCount === undefined) initialCount = params.blockCount;
+    if (initialCount === undefined) initialCount = 5;
 
-    for (var i = 0; i < count; i++) {
-      var width = startWidth + i * widthIncrease;
-      var height = startHeight + i * heightIncrease;
-      var x = transform.x + i * spacing;
-      var y = transform.y + height / 2;
-      var blockEntry = structure('evolution::structure::obstacleblock', x, y, width, height, 0);
-      var box = this.addBox(blockEntry, COLORS.obstacle, 'Obstacle');
-      this.blocks.push({
-        index: i,
-        x: x,
-        y: y,
-        width: width,
-        height: height,
-        left: x - width / 2,
-        right: x + width / 2,
-        bottom: transform.y,
-        top: transform.y + height,
-        box: box,
-      });
+    var course = {
+      entry: entry,
+      startX: transform.x,
+      bottom: transform.y,
+      spacing: params.blockSpacing === undefined ? 6.2 : Math.max(1, params.blockSpacing),
+      startWidth: params.startWidth === undefined ? 1.2 : Math.max(0.5, params.startWidth),
+      widthIncrease: params.widthIncrease === undefined ? 0.22 : Math.max(0, params.widthIncrease),
+      startHeight: params.startHeight === undefined ? 1.1 : Math.max(0.5, params.startHeight),
+      heightIncrease: params.heightIncrease === undefined ? 0.42 : Math.max(0, params.heightIncrease),
+      maxWidth: params.maxWidth === undefined ? Infinity : Math.max(0.5, params.maxWidth),
+      maxHeight: params.maxHeight === undefined ? Infinity : Math.max(0.5, params.maxHeight),
+      lookAheadBlocks: Utils.clamp(
+        Math.round(params.lookAheadBlocks === undefined ? 3 : params.lookAheadBlocks),
+        1,
+        12
+      ),
+      nextIndex: 0,
+      blocks: [],
+    };
+    this.obstacleBlockCourses.push(course);
+
+    initialCount = Utils.clamp(Math.round(initialCount), 1, 12);
+    for (var i = 0; i < initialCount; i++) {
+      this.addObstacleBlock(course);
     }
+  };
+
+  /** Adds the next progressively larger static block for a generated course. */
+  Scene.prototype.addObstacleBlock = function (course) {
+    var sequenceIndex = course.nextIndex++;
+    var width = Math.min(course.maxWidth, course.startWidth + sequenceIndex * course.widthIncrease);
+    var height = Math.min(course.maxHeight, course.startHeight + sequenceIndex * course.heightIncrease);
+    var x = course.startX + sequenceIndex * course.spacing;
+    var y = course.bottom + height / 2;
+    var blockEntry = structure('evolution::structure::obstacleblock', x, y, width, height, 0);
+    var box = this.addBox(blockEntry, COLORS.obstacle, 'Obstacle');
+    var block = {
+      // `index` is unique across every course and is used by the objective
+      // tracker to remember an individual clear.
+      index: this.blocks.length,
+      courseIndex: sequenceIndex,
+      x: x,
+      y: y,
+      width: width,
+      height: height,
+      left: x - width / 2,
+      right: x + width / 2,
+      bottom: course.bottom,
+      top: course.bottom + height,
+      box: box,
+    };
+    course.blocks.push(block);
+    this.blocks.push(block);
+    return block;
+  };
+
+  /**
+   * Extends every generated obstacle course until it has a few whole blocks
+   * beyond `leadingX`. The per-call safety cap avoids a runaway allocation if
+   * a custom scene teleports a creature far forward; normal movement has no
+   * total cap and can continue indefinitely.
+   */
+  Scene.prototype.extendObstacleBlocksAhead = function (leadingX) {
+    if (!isFinite(leadingX)) return 0;
+    var created = 0;
+    var MAX_BLOCKS_PER_EXTENSION = 64;
+
+    for (var i = 0; i < this.obstacleBlockCourses.length; i++) {
+      var course = this.obstacleBlockCourses[i];
+      var minimumRight = leadingX + course.lookAheadBlocks * course.spacing;
+      var last = course.blocks[course.blocks.length - 1];
+      while (last && last.left < minimumRight && created < MAX_BLOCKS_PER_EXTENSION) {
+        last = this.addObstacleBlock(course);
+        created++;
+      }
+    }
+    return created;
+  };
+
+  /** Extends a course for non-Evolution callers such as Ecosystem mode. */
+  Scene.prototype.extendObstacleBlocksForWorld = function () {
+    if (!this.obstacleBlockCourses.length || !this.world || !this.world.bodies) return 0;
+    var leadingX = -Infinity;
+    for (var i = 0; i < this.world.bodies.length; i++) {
+      var body = this.world.bodies[i];
+      if (!body || body.fixed || body.collides === false) continue;
+      leadingX = Math.max(leadingX, body.x + (body.radius || 0));
+    }
+    return this.extendObstacleBlocksAhead(leadingX);
   };
 
   Scene.prototype.buildDistanceMarkers = function (entry) {
@@ -504,6 +574,7 @@
 
   Scene.prototype.update = function (dt) {
     this.time += dt;
+    this.extendObstacleBlocksForWorld();
 
     for (var i = 0; i < this.obstacleSpawners.length; i++) {
       var entry = this.obstacleSpawners[i];
@@ -663,10 +734,26 @@
     return true;
   };
 
-  /** Returns the next legacy moving obstacle or the first block in the course. */
-  Scene.prototype.getObstacle = function () {
+  /**
+   * Returns the relevant obstacle for a creature. Legacy brains ask for this
+   * every update, so choose the nearest block that has not been fully cleared
+   * rather than permanently returning the first block of an endless course.
+   */
+  Scene.prototype.getObstacle = function (creature) {
     if (this.obstacles.length) return this.obstacles[0];
-    return this.blocks.length ? this.blocks[0] : null;
+    if (!this.blocks.length) return null;
+    if (!creature || !creature.joints) return this.blocks[0];
+
+    var trailingX = Infinity;
+    for (var i = 0; i < creature.joints.length; i++) {
+      var body = creature.joints[i].body || creature.joints[i];
+      trailingX = Math.min(trailingX, body.x - (body.radius || 0));
+    }
+    if (!isFinite(trailingX)) return this.blocks[0];
+    for (var b = 0; b < this.blocks.length; b++) {
+      if (this.blocks[b].right >= trailingX - 0.05) return this.blocks[b];
+    }
+    return this.blocks[this.blocks.length - 1];
   };
 
   /* ------------------------------------------------------------------ *

@@ -320,11 +320,29 @@
     if (steps >= maxSteps) this.accumulator = 0;
   };
 
+  Evolution.prototype.getLeadingEdgeX = function (batch) {
+    var leadingX = -Infinity;
+    for (var i = 0; i < batch.length; i++) {
+      var joints = batch[i].joints || [];
+      for (var j = 0; j < joints.length; j++) {
+        var body = joints[j].body || joints[j];
+        leadingX = Math.max(leadingX, body.x + (body.radius || 0));
+      }
+    }
+    return leadingX;
+  };
+
   Evolution.prototype.tick = function (dt) {
     var batch = this.currentCreatureBatch;
     if (!batch.length || !this.world) {
       this.finishBatch();
       return;
+    }
+
+    // Populate an endless obstacle course before this physics step so a fast
+    // creature always has its next progressive block ready to collide with.
+    if (this.scene && this.scene.extendObstacleBlocksAhead) {
+      this.scene.extendObstacleBlocksAhead(this.getLeadingEdgeX(batch));
     }
 
     var i;
@@ -345,8 +363,8 @@
     this.world.simulate(dt, PHYSICS_SUBSTEPS, PHYSICS_ITERATIONS);
     this.world.forceCallbacks.pop();
 
-    // 3. Scene updates legacy dynamic structures; the default obstacle
-    // course is made of static blocks and needs no per-frame spawning.
+    // 3. Scene updates legacy dynamic structures. The obstacle course itself
+    // has already been extended ahead of the active batch for this step.
     this.scene.update(dt);
 
     // 4. Book keeping

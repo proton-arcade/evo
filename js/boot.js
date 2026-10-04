@@ -9,8 +9,24 @@
   var EVO = global.EVO;
   var UI = EVO.UI;
 
+  /** Keeps local-file previews from becoming an unexplained blank screen. */
+  function setStartupNoticeState(failed) {
+    var notice = document.getElementById('startup-notice');
+    if (!notice) return;
+    if (!failed) {
+      notice.classList.add('hidden');
+      notice.setAttribute('aria-hidden', 'true');
+      return;
+    }
+    notice.classList.remove('hidden');
+    notice.setAttribute('role', 'alert');
+    var status = notice.querySelector('p');
+    if (status) status.textContent = 'Evolution could not start from this page.';
+  }
+
   /** Shows a readable message if something goes wrong. */
   function showFatalError(message, details) {
+    setStartupNoticeState(true);
     var overlay = UI.el('div', 'modal-overlay');
     var dialog = UI.el('div', 'modal');
     dialog.appendChild(UI.el('div', 'modal-title', 'Something went wrong'));
@@ -70,6 +86,7 @@
   function start() {
     try {
       EVO.App.start();
+      setStartupNoticeState(false);
 
       if (EVO.Settings.ShowOnboarding) {
         showOnboarding();

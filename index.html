@@ -48,6 +48,20 @@
     <script src="js/boot.js"></script>
   </head>
   <body>
+    <!--
+      iOS can show a local HTML document in a non-interactive Files preview.
+      Keep a real HTML message in the document (rather than relying on JS) so
+      that mode explains why the game has not started instead of showing white.
+    -->
+    <div id="startup-notice" class="startup-notice" role="status" aria-live="polite">
+      <h1>EVOLUTION</h1>
+      <p>Loading the interactive simulator…</p>
+      <p class="startup-note">
+        If this message remains, this file was opened in a preview that cannot run the app. On iPhone or iPad,
+        open a hosted web address instead of a local <code>file://</code> copy, and keep the <code>css</code> and
+        <code>js</code> folders beside <code>index.html</code> when transferring the project.
+      </p>
+    </div>
     <div id="screens"></div>
     <noscript>
       <p style="padding: 20px">Evolution needs JavaScript to run. Please enable JavaScript and reload the page.</p>

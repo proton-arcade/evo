@@ -22,6 +22,7 @@
     SELECT: 'select',
     JOINT: 'joint',
     BONE: 'bone',
+    WING: 'wing',
     MUSCLE: 'muscle',
     DECORATION: 'decoration',
     ERASE: 'erase',
@@ -252,16 +253,18 @@
       this.toolButtons = {};
 
       var definitions = [
-        { tool: Tools.SELECT, label: 'Select', icon: '\u2723' },
-        { tool: Tools.JOINT, label: 'Joint', icon: '\u25CF' },
-        { tool: Tools.BONE, label: 'Bone', icon: '\u2571' },
-        { tool: Tools.MUSCLE, label: 'Muscle', icon: '\u2248' },
-        { tool: Tools.DECORATION, label: 'Decor', icon: '\u263A' },
-        { tool: Tools.ERASE, label: 'Erase', icon: '\u2715' },
+        { tool: Tools.SELECT, label: 'Select', icon: '\u2723', shortcut: 'V' },
+        { tool: Tools.JOINT, label: 'Joint', icon: '\u25CF', shortcut: 'J' },
+        { tool: Tools.BONE, label: 'Bone', icon: '\u2571', shortcut: 'B' },
+        { tool: Tools.WING, label: 'Wing', icon: '\u25E2', shortcut: 'W' },
+        { tool: Tools.MUSCLE, label: 'Muscle', icon: '\u2248', shortcut: 'M' },
+        { tool: Tools.DECORATION, label: 'Decor', icon: '\u263A', shortcut: 'D' },
+        { tool: Tools.ERASE, label: 'Erase', icon: '\u2715', shortcut: 'E' },
       ];
 
       definitions.forEach(function (definition) {
         var button = UI.el('button', 'tool-button');
+        button.title = definition.label + ' tool (' + definition.shortcut + ')';
         button.appendChild(UI.el('span', 'tool-icon', definition.icon));
         button.appendChild(UI.el('span', 'tool-label', definition.label));
         button.addEventListener('click', function () {
@@ -389,6 +392,7 @@
           v: Tools.SELECT,
           j: Tools.JOINT,
           b: Tools.BONE,
+          w: Tools.WING,
           m: Tools.MUSCLE,
           d: Tools.DECORATION,
           e: Tools.ERASE,
@@ -575,6 +579,16 @@
           this.pending = null;
           this.builder.cancelCurrentBone();
           this.render();
+        }
+        return;
+      }
+
+      if (this.tool === Tools.WING) {
+        var wingBone = this.hitBone(point);
+        if (wingBone) {
+          this.changeAndRecord(function (builder) {
+            return builder.setBoneIsWing(wingBone.id, !wingBone.isWing);
+          });
         }
         return;
       }
@@ -1149,6 +1163,13 @@
           );
           if (bone.isWing) {
             panel.add(
+              UI.el(
+                'p',
+                'panel-note',
+                'Connect this wing to another bone with a muscle. Its contraction and expansion power the flap.'
+              )
+            );
+            panel.add(
               Widgets.slider({
                 label: 'Wing chord',
                 min: 0.25,
@@ -1369,6 +1390,9 @@
           break;
         case Tools.BONE:
           hint = 'Tap one joint and then another to connect them with a bone.';
+          break;
+        case Tools.WING:
+          hint = 'Tap a bone to add a wing. Tap it again to remove the wing; connect it to a muscle to flap.';
           break;
         case Tools.MUSCLE:
           hint = 'Tap one bone and then another to connect them with a muscle.';

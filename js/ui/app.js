@@ -1080,7 +1080,7 @@
           body:
             'Place joints with the joint tool, connect them with bones and add muscles between two bones. ' +
             'Muscles contract or expand depending on the output of the creature\'s brain. ' +
-            'Use the settings panel to change weights and muscle strengths, mark wing bones, adjust their chord, and invert their powered stroke.',
+            'Use the Wing tool, or press W, then tap a bone to mark it as a wing; tap it again to remove the wing. Connect each wing to another bone with a muscle so contraction and expansion can power its flap. Use the settings panel to change weights and muscle strengths, adjust wing chord, and invert the powered stroke.',
         },
         {
           title: 'How the evolution works',
@@ -1090,7 +1090,7 @@
             'best creatures are selected and their genomes are recombined and mutated to form the next generation. ' +
             'The fitness function depends on the task: running rewards horizontal distance, jumping the maximum ' +
             'height, climbing the vertical distance, flying sustained time above the ground and average height, ' +
-            'and the obstacle jump rewards clearing a course of progressively larger blocks.',
+            'and the obstacle jump rewards clearing an endless course of progressively larger blocks.',
         },
         {
           title: 'Brain inputs',
