@@ -87,6 +87,7 @@
       creature.updateGeometry(0);
 
       this.applyBrain(creature, entry);
+      creature.autoFlap = !EVO.Settings || EVO.Settings.AutoFlapEnabled !== false;
       this.creatures.push(creature);
       cursorX += width + 1.5;
     }
@@ -166,6 +167,19 @@
     if (this.complete) return true;
     this.paused = !this.paused;
     return this.paused;
+  };
+
+  /**
+   * Shocks every resident, interrupting whatever each creature is doing
+   * right now (see `Creature.prototype.shock`).
+   */
+  EcosystemSimulation.prototype.shock = function (duration) {
+    if (!this.isRunning || this.complete) return 0;
+    var stunned = 0;
+    for (var i = 0; i < this.creatures.length; i++) {
+      if (this.creatures[i].shock(duration)) stunned++;
+    }
+    return stunned;
   };
 
   EcosystemSimulation.prototype.stop = function () {

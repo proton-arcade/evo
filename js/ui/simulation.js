@@ -127,9 +127,11 @@
         'nextCreatureButton',
         'autoplayToggle',
         'skipRecapToggle',
+        'autoFlapToggle',
         'durationSlider',
         'durationValue',
         'pauseButton',
+        'shockButton',
         'thumbnailCanvas',
         'thumbnailCaption',
         'statsPanel',
@@ -305,6 +307,17 @@
       recapRow.appendChild(this.skipRecapToggle);
       topLeft.appendChild(recapRow);
 
+      var flapRow = UI.el('div', 'hud-row');
+      flapRow.appendChild(UI.el('span', 'hud-row-label', 'AUTO FLAP'));
+      this.autoFlapToggle = UI.el('button', 'hud-toggle', 'ON');
+      this.autoFlapToggle.title =
+        'Let winged creatures automatically flap while airborne or falling';
+      this.autoFlapToggle.addEventListener('click', function () {
+        self.setAutoFlap(!(Settings && Settings.AutoFlapEnabled));
+      });
+      flapRow.appendChild(this.autoFlapToggle);
+      topLeft.appendChild(flapRow);
+
       var durationRow = UI.el('div', 'hud-row');
       durationRow.appendChild(UI.el('span', 'hud-row-label', 'DURATION'));
       this.durationSlider = UI.el('input', 'hud-slider');
@@ -341,6 +354,16 @@
         self.refreshHud();
       });
       topControls.appendChild(this.flightDebugToggle);
+
+      this.shockButton = UI.el('button', 'evo-button small shock-button', '\u26A1 Shock');
+      this.shockButton.type = 'button';
+      this.shockButton.title =
+        'Shock the creatures: interrupts whatever they are doing right now (S)';
+      this.shockButton.setAttribute('aria-label', 'Shock the creatures');
+      this.shockButton.addEventListener('click', function () {
+        self.shockCreatures();
+      });
+      topControls.appendChild(this.shockButton);
 
       this.pauseButton = UI.el('button', 'evo-button small simulation-pause-button', 'Pause');
       this.pauseButton.type = 'button';
@@ -508,6 +531,36 @@
       button.textContent = paused ? 'Resume' : 'Pause';
       button.title = paused ? 'Resume the simulation' : 'Pause the simulation';
       button.setAttribute('aria-label', paused ? 'Resume simulation' : 'Pause simulation');
+    },
+
+    refreshShockButton: function () {
+      var button = this.shockButton;
+      if (!button) return;
+      var available =
+        this.state === 'simulating' && !!this.evolution && !this.evolution.paused;
+      button.classList.toggle('hidden', !available);
+    },
+
+    /** Startles the whole current batch, stopping each creature mid-action. */
+    shockCreatures: function () {
+      if (this.state !== 'simulating' || !this.evolution || this.evolution.paused) return;
+      this.evolution.shock();
+    },
+
+    /** Toggles the built-in wing reflex for current and future creatures. */
+    setAutoFlap: function (enabled) {
+      enabled = !!enabled;
+      if (Settings) Settings.AutoFlapEnabled = enabled;
+      if (this.evolution) {
+        this.evolution.currentCreatureBatch.forEach(function (creature) {
+          creature.autoFlap = enabled;
+          if (!enabled) {
+            creature.flapPhase = 0;
+            creature.flapHold = 0;
+          }
+        });
+      }
+      this.refreshHud();
     },
 
     exitSimulation: function () {
@@ -1092,6 +1145,7 @@
         this.phaseLabel.textContent = 'SIMULATING';
       }
       this.refreshSimulationPauseButton();
+      this.refreshShockButton();
 
       var inPlayback = this.state === 'playback';
       var hasRecording = inPlayback && !!this.playback;
@@ -1133,6 +1187,12 @@
         this.skipRecapToggle.textContent = this.skipRecap ? 'ON' : 'OFF';
         this.skipRecapToggle.classList.toggle('active', this.skipRecap);
         this.skipRecapToggle.setAttribute('aria-pressed', this.skipRecap ? 'true' : 'false');
+      }
+      if (this.autoFlapToggle) {
+        var autoFlap = !Settings || Settings.AutoFlapEnabled !== false;
+        this.autoFlapToggle.textContent = autoFlap ? 'ON' : 'OFF';
+        this.autoFlapToggle.classList.toggle('active', autoFlap);
+        this.autoFlapToggle.setAttribute('aria-pressed', autoFlap ? 'true' : 'false');
       }
       this.durationSlider.value = String(this.settings.SimulationTime);
       this.durationValue.textContent = this.settings.SimulationTime + 'S';
@@ -1555,6 +1615,10 @@
             break;
           case 'r':
             self.resetCamera();
+            break;
+          case 's':
+          case 'S':
+            self.shockCreatures();
             break;
           case 'ArrowLeft':
             if (self.state === 'playback' && self.playback) {

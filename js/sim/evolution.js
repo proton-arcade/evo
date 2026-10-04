@@ -106,6 +106,19 @@
     }
   };
 
+  /**
+   * Shocks every creature of the current batch, interrupting whatever each
+   * of them is doing right now (see `Creature.prototype.shock`). Returns
+   * the number of stunned creatures.
+   */
+  Evolution.prototype.shock = function (duration) {
+    var stunned = 0;
+    for (var i = 0; i < this.currentCreatureBatch.length; i++) {
+      if (this.currentCreatureBatch[i].shock(duration)) stunned++;
+    }
+    return stunned;
+  };
+
   /* ------------------------------------------------------------------ *
    * Generation / batch lifecycle
    * ------------------------------------------------------------------ */
@@ -191,6 +204,7 @@
       });
       creature.objectiveTracker = EVO.ObjectiveTracker.create(this.Settings.Objective, creature);
       creature.usesLegacyRotationCalculation = this.data.LastV2SimulatedGeneration > 0;
+      creature.autoFlap = !EVO.Settings || EVO.Settings.AutoFlapEnabled !== false;
       creature.initialPosition = { x: creature.getXPosition(), y: creature.getYPosition() };
       batch.push(creature);
     }

@@ -101,6 +101,7 @@
     bone: '#2f2f2f',
     wing: '#138b91',
     wingForce: '#e58b18',
+    shock: '#f5c518',
     muscleContracting: '#8f2b2b',
     muscleExpanding: '#5f9ec4',
     muscleNeutral: '#d98c8c',
@@ -320,7 +321,12 @@
         }
       }
 
-      // 5. Optional aerodynamic force vectors for live wing debugging.
+      // 5. Shock flash: a stunned creature visibly reacts to the interrupt.
+      if (creature.shockTimer > 0) {
+        this.drawShockEffect(ctx, creature, camera);
+      }
+
+      // 6. Optional aerodynamic force vectors for live wing debugging.
       if (options.showWingDebug && creature.bones) {
         for (var w = 0; w < creature.bones.length; w++) {
           if (creature.bones[w].isWing) this.drawWingForceVector(ctx, creature.bones[w], camera);
@@ -414,6 +420,71 @@
       ctx.lineTo(x2 - head * Math.cos(angle + Math.PI / 6), y2 - head * Math.sin(angle + Math.PI / 6));
       ctx.closePath();
       ctx.fill();
+      ctx.restore();
+    },
+
+    /**
+     * Marks a shocked creature: a fading flash ring around the body and a
+     * small lightning bolt striking down onto it.
+     */
+    drawShockEffect: function (ctx, creature, camera) {
+      var joints = creature.joints;
+      if (!joints || !joints.length) return;
+
+      var minX = Infinity,
+        maxX = -Infinity,
+        minY = Infinity,
+        maxY = -Infinity,
+        cx = 0,
+        cy = 0;
+      for (var i = 0; i < joints.length; i++) {
+        var body = joints[i].body;
+        if (body.x < minX) minX = body.x;
+        if (body.x > maxX) maxX = body.x;
+        if (body.y < minY) minY = body.y;
+        if (body.y > maxY) maxY = body.y;
+        cx += body.x;
+        cy += body.y;
+      }
+      cx /= joints.length;
+      cy /= joints.length;
+
+      var duration = EVO.Creature.SHOCK_DURATION || 1;
+      var intensity = Utils.clamp(creature.shockTimer / duration, 0, 1);
+      var scale = camera.pixelsPerUnit();
+
+      ctx.save();
+
+      // Flash ring that expands and fades as the stun wears off.
+      var ringRadius =
+        (Math.max(maxX - minX, maxY - minY) / 2 + 0.8 + (1 - intensity) * 0.9) * scale;
+      ctx.globalAlpha = 0.25 + 0.5 * intensity;
+      ctx.strokeStyle = COLORS.shock;
+      ctx.lineWidth = Math.max(2, 0.09 * scale);
+      ctx.beginPath();
+      ctx.arc(camera.worldToScreenX(cx), camera.worldToScreenY(cy), ringRadius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Lightning bolt striking the top of the creature.
+      var topY = maxY + 0.4;
+      var bolt = [
+        { x: cx + 0.45, y: topY + 2.8 },
+        { x: cx - 0.4, y: topY + 1.7 },
+        { x: cx + 0.15, y: topY + 1.45 },
+        { x: cx - 0.2, y: topY + 0.1 },
+      ];
+      ctx.globalAlpha = 0.5 + 0.5 * intensity;
+      ctx.strokeStyle = COLORS.shock;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.lineWidth = Math.max(2.5, 0.14 * scale);
+      ctx.beginPath();
+      ctx.moveTo(camera.worldToScreenX(bolt[0].x), camera.worldToScreenY(bolt[0].y));
+      for (var p = 1; p < bolt.length; p++) {
+        ctx.lineTo(camera.worldToScreenX(bolt[p].x), camera.worldToScreenY(bolt[p].y));
+      }
+      ctx.stroke();
+
       ctx.restore();
     },
 

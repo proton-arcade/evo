@@ -1102,12 +1102,23 @@
             'controlled together).',
         },
         {
+          title: 'Wing reflex and shock',
+          body:
+            'Creatures with wings automatically know to flap: while a winged creature is airborne or falling, ' +
+            'a built-in reflex drives its wing muscles through rhythmic downstrokes, so it does not have to ' +
+            'evolve flapping from scratch. The reflex rests while the creature stands on the ground and can be ' +
+            'switched off with the AUTO FLAP toggle in the simulation HUD. The Shock button (or the S key) ' +
+            'startles the creatures and interrupts whatever they are doing right now: their brains and reflexes ' +
+            'pause, their muscles relax and their motion dies down for a moment before normal behaviour resumes.',
+        },
+        {
           title: 'Keyboard, mouse and touch',
           body:
             'Drag with the left mouse button to pan, use the scroll wheel or a pinch gesture to zoom. ' +
             'On touch screens, drag with one finger to pan and use two fingers to pan and zoom. In the editor, ' +
             'drag from one joint to another to create a bone and from one bone to another to create a muscle. ' +
-            'Use the Pause/Resume button or the space bar to pause and continue the simulation.',
+            'Use the Pause/Resume button or the space bar to pause and continue the simulation, and press S ' +
+            '(or use the Shock button) to shock the creatures and interrupt their current behaviour.',
         },
         {
           title: 'Gallery',

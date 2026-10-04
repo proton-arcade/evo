@@ -269,6 +269,17 @@
       });
       actions.appendChild(this.pauseButton);
 
+      this.shockButton = UI.el('button', 'evo-button small shock-button', '\u26A1 Shock');
+      this.shockButton.type = 'button';
+      this.shockButton.title = 'Shock the residents: interrupts whatever they are doing right now';
+      this.shockButton.setAttribute('aria-label', 'Shock the ecosystem residents');
+      this.shockButton.addEventListener('click', function () {
+        if (self.simulation && !self.simulation.complete && !self.simulation.paused) {
+          self.simulation.shock();
+        }
+      });
+      actions.appendChild(this.shockButton);
+
       var fitButton = UI.el('button', 'evo-button small', 'Fit');
       fitButton.addEventListener('click', function () {
         self.manualCamera = false;
@@ -388,6 +399,9 @@
         : this.simulation.paused
           ? 'Resume'
           : 'Pause';
+      if (this.shockButton) {
+        this.shockButton.disabled = this.simulation.complete || this.simulation.paused;
+      }
       if (!this.manualCamera) this.followCreatures();
     },
 

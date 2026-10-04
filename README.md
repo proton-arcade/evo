@@ -64,7 +64,8 @@ lifts, so beginning a two-finger gesture will not accidentally place a component
 
 * **Tasks**: Running, Jumping, Obstacle Jump, Climbing, Flying. Each task has its own scene
   (flat ground, an endless course that generates progressively larger blocks ahead of the creature,
-  or an endless staircase) and its own fitness function.
+  or an endless staircase) and its own fitness function. The Obstacle Jump course opens with a
+  visible stretch of fifteen blocks and keeps extending beyond them.
 * **Evolution**: every generation evaluates a population of neural networks, sorts them by fitness
   and breeds the next generation by selection, recombination and mutation. The best creatures can be
   kept unchanged (*keep best creatures*).
@@ -72,11 +73,19 @@ lifts, so beginning a two-finger gesture will not accidentally place a component
   original: distance to the ground, four distance sensors, a rotating sensor, velocity, angular
   velocity, ground contacts and rotation. One output per unique muscle id, plus one output that
   rotates the distance sensor.
-* **HUD**: generation, live fitness, phase, autoplay, a skip-recap toggle, duration, creature selector,
-  generation history, best-of-generation thumbnail, a Pause/Resume button, playback controls, speed,
-  visibility and camera controls. Flying also offers live wing-speed, angle-of-attack, lift/drag,
-  estimated-weight and airtime diagnostics with per-wing force vectors. Visibility can focus the previous
-  generation's champion in front of the current population.
+* **HUD**: generation, live fitness, phase, autoplay, a skip-recap toggle, an auto-flap toggle,
+  duration, creature selector, generation history, best-of-generation thumbnail, a Pause/Resume
+  button, a Shock button, playback controls, speed, visibility and camera controls. Flying also
+  offers live wing-speed, angle-of-attack, lift/drag, estimated-weight and airtime diagnostics with
+  per-wing force vectors. Visibility can focus the previous generation's champion in front of the
+  current population.
+* **Wing reflex**: creatures with powered wings automatically flap while they are airborne or
+  falling, so flight does not have to be discovered from scratch by evolution. The reflex rests on
+  the ground and can be switched off with the AUTO FLAP toggle.
+* **Shock**: the Shock button (or the `S` key) startles every creature in the current batch,
+  interrupting whatever it is doing — brains and reflexes pause, muscles relax and motion dies down
+  for a moment before normal behaviour resumes. A lightning bolt and flash mark each stunned
+  creature. The ecosystem screen offers the same control for its residents.
 * **Playback and saves**: after each generation the recording of the best creature is played back by
   default. You can scrub through it, skip recaps, or use **Save run** to name a replay or run checkpoint.
   **Save Brain** overwrites only the current action (Running, Jumping, Obstacle Jump, Climbing or
@@ -88,10 +97,10 @@ lifts, so beginning a two-finger gesture will not accidentally place a component
 * **Ghost**: while a generation is running, the best creature of the previous generation is drawn as a
   faded "ghost".
 
-Keyboard: `Space` pause/continue (or use the on-screen Pause/Resume button), `V` toggle visibility,
-`R` reset the camera, arrow keys switch the watched creature (or scrub the playback). Mouse: drag to
-pan, wheel/pinch to zoom. On touch screens, drag with one finger to pan and use two fingers to pan
-and zoom.
+Keyboard: `Space` pause/continue (or use the on-screen Pause/Resume button), `S` shock the
+creatures, `V` toggle visibility, `R` reset the camera, arrow keys switch the watched creature (or
+scrub the playback). Mouse: drag to pan, wheel/pinch to zoom. On touch screens, drag with one
+finger to pan and use two fingers to pan and zoom.
 
 ---
 
@@ -192,9 +201,10 @@ for test in tests/*.js; do node "$test"; done
 ```
 
 The suite includes a deterministic muscle-driven flying creature that must take off and sustain
-airtime after ground contact (plus a no-flap control), editor-to-simulation scenarios, in-place
-action-brain/replay updates, ecosystem selection and shared physics, floor friction, simulation playback, and mobile/touch
-layout checks.
+airtime after ground contact (plus a no-flap control), the automatic wing-flap reflex and the shock
+interrupt (in both the evolution loop and the ecosystem), editor-to-simulation scenarios, in-place
+action-brain/replay updates, ecosystem selection and shared physics, floor friction, simulation
+playback, and mobile/touch layout checks.
 
 ---
 

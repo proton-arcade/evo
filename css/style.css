@@ -215,6 +215,25 @@ input[type='range']::-moz-range-thumb {
   }
 }
 
+.evo-button.shock-button {
+  border-color: #c99700;
+  color: #9a7400;
+}
+
+@media (hover: hover) {
+  .evo-button.shock-button:hover {
+    background: #f5c518;
+    border-color: #f5c518;
+    color: #1b1b1b;
+  }
+}
+
+.evo-button.shock-button:active {
+  background: #f5c518;
+  border-color: #f5c518;
+  color: #1b1b1b;
+}
+
 .evo-button.small,
 .hud-button {
   padding: 5px 9px;
@@ -1155,6 +1174,7 @@ input[type='range']::-moz-range-thumb {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
