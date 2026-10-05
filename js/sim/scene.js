@@ -29,14 +29,33 @@
     DistanceMarkerSpawner: 'evolution::structure::distancemarkerspawner',
   };
 
-  var COLORS = {
-    ground: '#636363',
-    wall: '#565656',
-    steps: '#4F4F4F',
-    obstacle: '#151515',
-    marker: '#9e9e9e',
-    backgroundColor: '#ededed',
+  var THEME_COLORS = {
+    light: {
+      ground: '#636363',
+      wall: '#565656',
+      steps: '#4f4f4f',
+      obstacle: '#151515',
+      marker: '#9e9e9e',
+      backgroundColor: '#ededed',
+    },
+    dark: {
+      ground: '#292d33',
+      wall: '#343941',
+      steps: '#3d434b',
+      obstacle: '#87909a',
+      marker: '#6e747c',
+      backgroundColor: '#17191c',
+    },
   };
+  var COLORS = {};
+
+  function setTheme(theme) {
+    var palette = THEME_COLORS[theme === 'dark' ? 'dark' : 'light'];
+    Object.keys(palette).forEach(function (name) {
+      COLORS[name] = palette[name];
+    });
+  }
+  setTheme(EVO.Settings && EVO.Settings.Theme);
 
   /* ------------------------------------------------------------------ *
    * Structure description
@@ -872,6 +891,7 @@
 
   EVO.StructureType = StructureType;
   EVO.SceneColors = COLORS;
+  EVO.SceneTheme = { setTheme: setTheme };
   EVO.ScenePhysicsConfiguration = ScenePhysicsConfiguration;
   EVO.SimulationSceneDescription = SimulationSceneDescription;
   EVO.DefaultSimulationScenes = DefaultSimulationScenes;

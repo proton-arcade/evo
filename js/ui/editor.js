@@ -1442,7 +1442,7 @@
       var groundY = this.camera.worldToScreenY(0);
       if (groundY > 0 && groundY < this.camera.height) {
         ctx.save();
-        ctx.strokeStyle = '#d0d0d0';
+        ctx.strokeStyle = Renderer.COLORS.grid;
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(0, groundY);

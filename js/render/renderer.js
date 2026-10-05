@@ -93,28 +93,59 @@
   /* ------------------------------------------------------------------ *
    * Renderer
    * ------------------------------------------------------------------ */
-  var COLORS = {
-    background: '#ededed',
-    grid: '#c9c9c9',
-    joint: '#e10000',
-    jointOutline: '#a80000',
-    bone: '#2f2f2f',
-    wing: '#138b91',
-    wingForce: '#e58b18',
-    shock: '#f5c518',
-    muscleContracting: '#8f2b2b',
-    muscleExpanding: '#5f9ec4',
-    muscleNeutral: '#d98c8c',
-    structure: '#636363',
-    steps: '#4f4f4f',
-    obstacle: '#151515',
-    marker: '#b3b3b3',
-    selection: '#1b8ef2',
-    selectionFill: 'rgba(27, 142, 242, 0.18)',
+  var THEME_COLORS = {
+    light: {
+      background: '#ededed',
+      grid: '#c9c9c9',
+      joint: '#e10000',
+      jointOutline: '#a80000',
+      bone: '#2f2f2f',
+      wing: '#138b91',
+      wingForce: '#e58b18',
+      shock: '#f5c518',
+      muscleContracting: '#8f2b2b',
+      muscleExpanding: '#5f9ec4',
+      muscleNeutral: '#d98c8c',
+      structure: '#636363',
+      steps: '#4f4f4f',
+      obstacle: '#151515',
+      marker: '#b3b3b3',
+      selection: '#1b8ef2',
+      selectionFill: 'rgba(27, 142, 242, 0.18)',
+    },
+    dark: {
+      background: '#17191c',
+      grid: '#3b4048',
+      joint: '#ff3b3b',
+      jointOutline: '#b91f1f',
+      bone: '#d4d7dc',
+      wing: '#39b8c1',
+      wingForce: '#ffad42',
+      shock: '#f5c518',
+      muscleContracting: '#df6666',
+      muscleExpanding: '#72b7df',
+      muscleNeutral: '#bd7479',
+      structure: '#5f6670',
+      steps: '#454c55',
+      obstacle: '#87909a',
+      marker: '#6e747c',
+      selection: '#55a7ff',
+      selectionFill: 'rgba(85, 167, 255, 0.22)',
+    },
   };
+  var COLORS = {};
+
+  function setTheme(theme) {
+    var palette = THEME_COLORS[theme === 'dark' ? 'dark' : 'light'];
+    Object.keys(palette).forEach(function (name) {
+      COLORS[name] = palette[name];
+    });
+  }
+  setTheme(EVO.Settings && EVO.Settings.Theme);
 
   var Renderer = {
     COLORS: COLORS,
+    setTheme: setTheme,
 
     drawBackground: function (ctx, camera) {
       ctx.fillStyle = COLORS.background;
