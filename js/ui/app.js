@@ -286,8 +286,7 @@
   }
 
   function objectiveBrainKey(objective) {
-    var name = EVO.ObjectiveUtil.stringRepresentation(objective).replace(/[^a-z0-9]/gi, '');
-    return name ? name.charAt(0).toLowerCase() + name.substr(1) : 'running';
+    return EVO.BrainProfile.keyForObjective(objective);
   }
 
   var Storage = {
@@ -299,7 +298,11 @@
       });
     },
 
-    saveDesign: function (design, existingId) {
+    /**
+     * Saves a design. `brains` optionally attaches evolved action brains —
+     * used when importing a creature file that carries them with the design.
+     */
+    saveDesign: function (design, existingId, brains) {
       var designs = Store.getJSON('designs', []);
       var entry = {
         id: existingId || makeId(),
@@ -318,9 +321,38 @@
           break;
         }
       }
+      if (EVO.CreatureFile.countBrains(brains)) {
+        var normalized = Storage.normalizeBrains(brains);
+        entry.evolvedBrains = Object.assign({}, entry.evolvedBrains, normalized.brains);
+        entry.evolvedCreature = normalized.latest || entry.evolvedCreature || null;
+      }
       if (!replaced) designs.unshift(entry);
       Store.setJSON('designs', designs);
       return entry.id;
+    },
+
+    /** Keeps only the known actions of a brain map and reports the first one. */
+    normalizeBrains: function (brains) {
+      var normalized = {};
+      var latest = null;
+      EVO.ObjectiveUtil.ALL_OBJECTIVES.forEach(function (objective) {
+        var key = objectiveBrainKey(objective);
+        var profile = brains && brains[key];
+        if (!profile || !profile.chromosome || !profile.chromosome.length) return;
+        normalized[key] = profile;
+        if (!latest) latest = profile;
+      });
+      return { brains: normalized, latest: latest };
+    },
+
+    /** The evolved action brains stored on a My Creatures entry. */
+    getBrainProfilesForDesign: function (designId) {
+      if (!designId) return {};
+      var designs = Store.getJSON('designs', []);
+      for (var i = 0; i < designs.length; i++) {
+        if (designs[i].id === designId) return designs[i].evolvedBrains || {};
+      }
+      return {};
     },
 
     getEvolvedBrainProfiles: function (entry) {

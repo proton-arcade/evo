@@ -577,6 +577,147 @@
   };
 
   /* ------------------------------------------------------------------ *
+   * BrainProfile — one evolved action brain of a saved creature
+   * ------------------------------------------------------------------ *
+   * A creature in My Creatures keeps one profile per action (Running,
+   * Jumping, Obstacle Jump, Climbing, Flying). `replayId` is deliberately
+   * not encoded: it points at a Gallery recording in the local browser
+   * storage and would dangle once the file is opened somewhere else.
+   */
+  var BrainProfile = {
+    /** The storage key of an action brain: `Obstacle Jump` -> `obstacleJump`. */
+    keyForObjective: function (objective) {
+      var name = EVO.ObjectiveUtil.stringRepresentation(objective).replace(/[^a-z0-9]/gi, '');
+      return name ? name.charAt(0).toLowerCase() + name.substr(1) : 'running';
+    },
+
+    /** Inverse of `keyForObjective`, used for files with an unkeyed brain list. */
+    objectiveForKey: function (key) {
+      return EVO.ObjectiveUtil.objectiveFromString(
+        String(key).replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      );
+    },
+
+    create: function (task, generation, chromosome, networkSettings, scene, stats, lastV2Generation) {
+      return {
+        task: task === undefined ? null : task,
+        generation: generation || 0,
+        chromosome: chromosome || [],
+        networkSettings: networkSettings || null,
+        scene: scene || null,
+        stats: stats || null,
+        lastV2SimulatedGeneration: lastV2Generation || 0,
+      };
+    },
+
+    encode: function (profile) {
+      if (!profile || !profile.chromosome || !profile.chromosome.length) return null;
+      return {
+        task: profile.task,
+        generation: profile.generation || 0,
+        chromosome: profile.chromosome.map(function (weight) {
+          return Utils.round4(weight);
+        }),
+        networkSettings: profile.networkSettings
+          ? profile.networkSettings
+          : EVO.NeuralNetworkSettings.encode(EVO.NeuralNetworkSettings.defaultSettings()),
+        scene: profile.scene || null,
+        stats: profile.stats || null,
+        lastV2SimulatedGeneration: profile.lastV2SimulatedGeneration || 0,
+      };
+    },
+
+    decode: function (json) {
+      if (!json || typeof json !== 'object') return null;
+      if (!json.chromosome || !json.chromosome.length) return null;
+      return BrainProfile.create(
+        json.task === undefined ? null : json.task,
+        json.generation || 0,
+        json.chromosome.slice(),
+        json.networkSettings || null,
+        json.scene || null,
+        json.stats || null,
+        json.lastV2SimulatedGeneration || 0
+      );
+    },
+
+    /** Encodes a `{ running: profile, … }` map, dropping empty profiles. */
+    encodeCollection: function (brains) {
+      var json = {};
+      var keys = brains ? Object.keys(brains) : [];
+      for (var i = 0; i < keys.length; i++) {
+        var encoded = BrainProfile.encode(brains[keys[i]]);
+        if (encoded) json[keys[i]] = encoded;
+      }
+      return json;
+    },
+
+    /**
+     * Normalizes exported brains back into the `{ running: profile, … }`
+     * shape. Both a keyed map and a plain list are accepted, and the key is
+     * always taken from the profile's own task so a renamed key cannot make a
+     * brain unreachable.
+     */
+    decodeCollection: function (json) {
+      var brains = {};
+      var raw = json && json.brains;
+      if (!raw) return brains;
+      var pairs = Array.isArray(raw)
+        ? raw.map(function (profile) {
+            return { key: null, profile: profile };
+          })
+        : Object.keys(raw).map(function (key) {
+            return { key: key, profile: raw[key] };
+          });
+      for (var i = 0; i < pairs.length; i++) {
+        var profile = BrainProfile.decode(pairs[i].profile);
+        if (!profile) continue;
+        var key;
+        if (profile.task !== null) {
+          key = BrainProfile.keyForObjective(profile.task);
+        } else {
+          // A brain without a task falls back to its key, then to Running.
+          var task = pairs[i].key
+            ? BrainProfile.objectiveForKey(pairs[i].key)
+            : EVO.Objective.Running;
+          key = BrainProfile.keyForObjective(task);
+        }
+        if (key) brains[key] = profile;
+      }
+      return brains;
+    },
+  };
+
+  /* ------------------------------------------------------------------ *
+   * CreatureFile — a creature design exported together with its brains
+   * ------------------------------------------------------------------ *
+   * The top-level keys stay exactly those of a plain creature design, so the
+   * Unity save files and older web editions keep reading exported creatures;
+   * they simply ignore the additional `brains` entry.
+   */
+  var CreatureFile = {
+    encode: function (design, brains) {
+      var json = CreatureDesign.encode(design);
+      var encodedBrains = BrainProfile.encodeCollection(brains);
+      if (Object.keys(encodedBrains).length) json.brains = encodedBrains;
+      return json;
+    },
+
+    /** Returns `{ design, brains }` — `brains` is `{}` for a design-only file. */
+    decode: function (json) {
+      if (typeof json === 'string') json = JSON.parse(json);
+      return {
+        design: CreatureDesign.decode(json),
+        brains: BrainProfile.decodeCollection(json),
+      };
+    },
+
+    countBrains: function (brains) {
+      return brains ? Object.keys(brains).length : 0;
+    },
+  };
+
+  /* ------------------------------------------------------------------ *
    * CreatureRecorder / CreatureRecording
    * ------------------------------------------------------------------ */
   var SAMPLES_PER_SECOND = 30;
@@ -827,6 +968,8 @@
   EVO.CreatureDesign = CreatureDesign;
   EVO.CreatureStats = CreatureStats;
   EVO.ChromosomeData = ChromosomeData;
+  EVO.BrainProfile = BrainProfile;
+  EVO.CreatureFile = CreatureFile;
   EVO.SimulationSettings = SimulationSettings;
   EVO.SimulationData = SimulationData;
   EVO.CreatureRecorder = CreatureRecorder;

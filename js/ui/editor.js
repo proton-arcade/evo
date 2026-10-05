@@ -936,12 +936,19 @@
     },
 
     exportDesign: function () {
-      var json = JSON.stringify(EVO.CreatureDesign.encode(this.builder.design), null, 2);
+      var design = this.builder.design;
+      // The evolved action brains travel with the design, so an exported
+      // creature keeps its trained behaviour after it is imported again.
+      var json = JSON.stringify(
+        EVO.CreatureFile.encode(design, Storage.getBrainProfilesForDesign(this.designId)),
+        null,
+        2
+      );
       var blob = new Blob([json], { type: 'application/json' });
       var url = URL.createObjectURL(blob);
       var link = document.createElement('a');
       link.href = url;
-      link.download = (this.builder.design.name || 'creature') + '.json';
+      link.download = (design.name || 'creature') + '.json';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -965,10 +972,28 @@
             close: false,
             onClick: function () {
               try {
-                var design = EVO.CreatureDesign.decode(JSON.parse(textarea.value));
+                var bundle = EVO.CreatureFile.decode(JSON.parse(textarea.value));
+                var design = bundle.design;
                 if (!design.joints.length) throw new Error('The design contains no joints.');
+                var brainCount = EVO.CreatureFile.countBrains(bundle.brains);
+                var designId = null;
+                if (brainCount) {
+                  // Action brains live on a My Creatures entry, so a file that
+                  // carries them is stored as a creature right away instead of
+                  // having its brains silently dropped.
+                  design.name = design.name || 'Unnamed';
+                  designId = Storage.saveDesign(design, null, bundle.brains);
+                }
                 Modal.close();
-                self.installDesign(design, null);
+                self.installDesign(design, designId);
+                if (brainCount) {
+                  Modal.alert(
+                    '“' + design.name + '” was imported with ' + brainCount +
+                      ' evolved brain' + (brainCount === 1 ? '' : 's') +
+                      ' and saved to My Creatures.',
+                    'Imported'
+                  );
+                }
               } catch (error) {
                 Modal.alert('Could not read that design: ' + error.message, 'Import failed');
               }
