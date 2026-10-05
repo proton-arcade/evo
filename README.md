@@ -135,6 +135,14 @@ message in local previews instead of leaving a blank screen.
   updates the selected existing design in place; each action has its own chromosome and network settings,
   so saving Running will not replace Jumping, Obstacle Jump, Climbing or Flying. It also updates the
   Gallery replay linked to that action. It does not create a duplicate creature snapshot.
+* **Creature files** — the editor's **Export** writes the design *together with every evolved action
+  brain* of that creature: each brain travels as a `brains` entry holding its task, generation,
+  chromosome, network topology, scene and stats. **Import** reads them back, so a trained creature can
+  be moved between browsers or machines without re-evolving anything. A file that carries brains is
+  stored in My Creatures on import (brains belong to a library entry); a design-only file is simply
+  loaded into the editor as before. The `brains` entry is additive — the file keeps the plain
+  `name`/`joints`/`bones`/`muscles`/`decorations` keys, so the Unity version and older web editions
+  still read it and just ignore the brains. The browser-local Gallery replay reference is not exported.
 * **Recordings** — **Save replay** stores a named movement recording in the Gallery. The brain save also
   keeps the best-generation replay for that action up to date.
 * **Simulations** — a simulation (settings, scene, best creatures, current chromosomes) can be saved
@@ -171,6 +179,10 @@ js/ui/simulation.js         the simulation screen (HUD, playback, save/load)
 js/ui/ecosystem.js           resident selection and shared-world ecosystem controls
 js/ui/gallery.js            the recording gallery
 js/boot.js                  startup and error handling
+tools/                      headless helpers, not loaded by index.html
+tools/train-creature.js     trains one action brain for a creature file with the real evolution loop
+tools/build-creature-file.js assembles trained brains into an exportable creature file
+cc/                         custom creature files (design + evolved brains); not part of the app
 ```
 
 ---
@@ -203,8 +215,9 @@ for test in tests/*.js; do node "$test"; done
 The suite includes a deterministic muscle-driven flying creature that must take off and sustain
 airtime after ground contact (plus a no-flap control), the automatic wing-flap reflex and the shock
 interrupt (in both the evolution loop and the ecosystem), editor-to-simulation scenarios, in-place
-action-brain/replay updates, ecosystem selection and shared physics, floor friction, simulation
-playback, and mobile/touch layout checks.
+action-brain/replay updates, creature-file export/import round trips that must keep the evolved action
+brains, ecosystem selection and shared physics, floor friction, simulation playback, and mobile/touch
+layout checks.
 
 ---
 
