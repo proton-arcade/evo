@@ -51,8 +51,9 @@ assembles the results with the same encoder the editor's Export button uses.
 ## g8t7r
 
 11 joints, 13 bones, 16 muscles, no wings. Trained with 5 actions × 300 generations ×
-population 40 = **60,000 simulated creatures** (about 22 minutes of wall time), using the
-default network of 11 inputs, one hidden layer of 10, and 17 outputs.
+population 40 = **60,000 simulated creatures** (1344 s of summed trainer time, run two
+actions at a time on two cores), using the default network of 11 inputs, one hidden layer
+of 10, and 17 outputs.
 
 | Action | Best at gen | Fitness | What it does |
 | --- | --- | --- | --- |
