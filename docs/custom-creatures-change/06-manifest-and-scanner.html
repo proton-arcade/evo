@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ededed">
+  <title>Manifest and scanner — Custom Creatures change record</title>
+  <meta name="description" content="Change record for evo's light-theme Custom Creatures rebuild.">
+  <link rel="stylesheet" href="report.css">
+</head>
+<body>
+  <div class="marker" data-position="start">jjkk12345678910</div>
+  <header class="report-bar">
+    <a class="brand" href="index.html">EVO / Custom Creatures</a>
+    <span class="report-position">Section 06 / 10</span>
+  </header>
+
+<section class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">Section 06 / 10</p>
+    <h1>Manifest and scanner</h1>
+    <p class="hero-lead">Static folder discovery without a build system.</p>
+  </div>
+</section>
+<div class="report-shell">
+  <nav class="report-nav" aria-label="Report sections"><p class="kicker">Change record</p><ol><li><a href="01-rebuilt-on-existing-css.html">Rebuilt on the existing CSS</a></li><li><a href="02-custom-screen.html">The screen</a></li><li><a href="03-library-logic.html">Library logic</a></li><li><a href="04-drawing-designs.html">Drawing designs</a></li><li><a href="05-shared-refactors.html">Shared refactors</a></li><li><a href="06-manifest-and-scanner.html" aria-current="page">Manifest and scanner</a></li><li><a href="07-css-block.html">The CSS block</a></li><li><a href="08-tests.html">Tests</a></li><li><a href="09-documentation.html">Documentation</a></li><li><a href="10-verification-and-gaps.html">Verification and known gaps</a></li></ol></nav>
+  <main class="report-main">
+    <section class="section-heading">
+      <p class="eyebrow">Detailed record</p>
+      <h1>Manifest and scanner</h1>
+      <p class="hero-lead">Static folder discovery without a build system.</p>
+    </section>
+
+<h2>Why a manifest exists</h2>
+<p>A browser can fetch a known static file but cannot list arbitrary files in a served directory. <code>cc/index.json</code> is the small bridge: it names the creature files that the screen should request.</p>
+
+<h2><code>tools/scan-cc.js</code></h2>
+<ul>
+  <li>Reads the repository’s <code>cc/</code> directory.</li>
+  <li>Keeps case-insensitive <code>.json</code> filenames except <code>index.json</code>.</li>
+  <li>Sorts names deterministically.</li>
+  <li>Writes a stable object with a format marker and <code>files</code> array.</li>
+  <li>With <code>--check</code>, compares expected and current content and exits non-zero instead of writing.</li>
+</ul>
+<pre><code>node tools/scan-cc.js          # regenerate cc/index.json
+node tools/scan-cc.js --check  # CI / review verification</code></pre>
+
+<h2>Current manifest</h2>
+<pre><code>{
+  "format": 1,
+  "files": [
+    "g8t7r.json"
+  ]
+}</code></pre>
+<p>The screen still treats manifest content as untrusted. Even a hand-edited entry must pass <code>parseManifest</code> before a URL is formed.</p>
+
+<h2>Bundled file</h2>
+<p><code>cc/g8t7r.json</code> contains an 11-joint, 13-bone, 16-muscle design and five evolved action brains. The file supplies the feature’s current hero and all six current rows: All, plus one row for each objective.</p>
+
+<h2>Checks tied to it</h2>
+<ul>
+  <li><code>tests/custom-creature-view-test.js</code> independently lists <code>cc/</code> and compares it with the manifest.</li>
+  <li><code>tests/custom-creature-library-test.js</code> scans each creature file while explicitly excluding <code>index.json</code>.</li>
+  <li>The verification pass ran <code>node tools/scan-cc.js --check</code> and received <code>cc/index.json is up to date (1 file).</code></li>
+</ul>
+
+<h2>Restyle impact</h2>
+<div class="callout success"><p>No manifest, scanner or creature data changed in the light rebuild. Discovery remains independent of presentation.</p></div>
+
+    <nav class="page-turn" aria-label="Previous and next section">
+      <a href="05-shared-refactors.html"><small>Previous</small>Shared refactors</a>
+      <a href="07-css-block.html"><small>Next</small>The CSS block</a>
+    </nav>
+  </main>
+</div>
+
+
+  <footer class="page-footer"><p>Recorded 5 October 2026 · branch <code>arena/01a109d4-evo</code> · rebuild <code>c591e5f</code></p></footer>
+  <div class="marker" data-position="end">jjkk12345678910</div>
+</body>
+</html>

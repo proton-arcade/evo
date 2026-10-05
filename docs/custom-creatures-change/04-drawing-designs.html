@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ededed">
+  <title>Drawing designs — Custom Creatures change record</title>
+  <meta name="description" content="Change record for evo's light-theme Custom Creatures rebuild.">
+  <link rel="stylesheet" href="report.css">
+</head>
+<body>
+  <div class="marker" data-position="start">jjkk12345678910</div>
+  <header class="report-bar">
+    <a class="brand" href="index.html">EVO / Custom Creatures</a>
+    <span class="report-position">Section 04 / 10</span>
+  </header>
+
+<section class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">Section 04 / 10</p>
+    <h1>Drawing designs</h1>
+    <p class="hero-lead">Static creature drawing and the editor palette.</p>
+  </div>
+</section>
+<div class="report-shell">
+  <nav class="report-nav" aria-label="Report sections"><p class="kicker">Change record</p><ol><li><a href="01-rebuilt-on-existing-css.html">Rebuilt on the existing CSS</a></li><li><a href="02-custom-screen.html">The screen</a></li><li><a href="03-library-logic.html">Library logic</a></li><li><a href="04-drawing-designs.html" aria-current="page">Drawing designs</a></li><li><a href="05-shared-refactors.html">Shared refactors</a></li><li><a href="06-manifest-and-scanner.html">Manifest and scanner</a></li><li><a href="07-css-block.html">The CSS block</a></li><li><a href="08-tests.html">Tests</a></li><li><a href="09-documentation.html">Documentation</a></li><li><a href="10-verification-and-gaps.html">Verification and known gaps</a></li></ol></nav>
+  <main class="report-main">
+    <section class="section-heading">
+      <p class="eyebrow">Detailed record</p>
+      <h1>Drawing designs</h1>
+      <p class="hero-lead">Static creature drawing and the editor palette.</p>
+    </section>
+
+<h2>Shared render models</h2>
+<p><code>js/render/viewModel.js</code> turns a static <code>CreatureDesign</code> into the object shape expected by <code>Renderer.drawCreature</code>. Joints get lightweight bodies, bones resolve joint references and geometry, muscles resolve bones, and decorations carry their attachment transforms.</p>
+
+<h2>Safe and strict paths</h2>
+<div class="cards">
+  <article class="card"><h3><code>buildRenderModel</code></h3><p>The editor-compatible path preserves every decoded component. It assumes a valid design and is useful where invalid references should be visible as an error.</p></article>
+  <article class="card"><h3><code>buildSafeRenderModel</code></h3><p>The poster path filters a bone missing either joint, then removes muscles and decorations that depend on filtered bones. A damaged preview cannot crash the renderer.</p></article>
+</div>
+
+<h2>Framing</h2>
+<ul>
+  <li><code>designBounds</code> measures joint extents and returns <code>null</code> for an empty design.</li>
+  <li><code>frameDesign</code> retains the editor’s original centering and zoom rules.</li>
+  <li><code>fitCamera</code> fits a design inside a fractional canvas region, accounting for wide heroes, tall cards and text occupying part of a cover.</li>
+</ul>
+
+<h2>The rebuilt poster path</h2>
+<p>The prior poster renderer created a dark radial gradient, temporarily changed global renderer colors to pale bones and restored them afterward. That made the canvases internally dark even after surrounding CSS was changed.</p>
+<p>The rebuilt <code>drawPoster</code> uses only shared renderer operations:</p>
+<pre><code>Renderer.drawBackground(ctx, camera);
+if (options.grid) {
+  Renderer.drawGrid(ctx, camera, visibility, gridSize);
+}
+Renderer.drawCreature(ctx, buildSafeRenderModel(design), camera, options);</code></pre>
+<ul>
+  <li>The backing store is still sized to the app’s capped display pixel ratio.</li>
+  <li>The renderer’s <code>#ededed</code> background and normal red joints, dark bones and neutral muscles are preserved.</li>
+  <li><code>options.grid</code> can be <code>true</code> for the default subtle visibility or a numeric visibility.</li>
+  <li><code>options.gridSize</code> can override the shared setting.</li>
+  <li><code>try/finally</code> still guarantees canvas-state restoration, but no global palette mutation is needed.</li>
+</ul>
+
+<h2>Where the grid is used</h2>
+<p>The large featured hero and Explore cover request the grid. Small shelf posters omit it for clarity, but use the same light background and creature colors. This is the “optional grid” boundary: one renderer, chosen per use.</p>
+
+<h2>Changed surface</h2>
+<div class="change-stats"><div class="change-stat"><strong>15</strong><span>insertions</span></div><div class="change-stat"><strong>30</strong><span>deletions</span></div><div class="change-stat"><strong>0</strong><span>palette mutations</span></div></div>
+
+    <nav class="page-turn" aria-label="Previous and next section">
+      <a href="03-library-logic.html"><small>Previous</small>Library logic</a>
+      <a href="05-shared-refactors.html"><small>Next</small>Shared refactors</a>
+    </nav>
+  </main>
+</div>
+
+
+  <footer class="page-footer"><p>Recorded 5 October 2026 · branch <code>arena/01a109d4-evo</code> · rebuild <code>c591e5f</code></p></footer>
+  <div class="marker" data-position="end">jjkk12345678910</div>
+</body>
+</html>

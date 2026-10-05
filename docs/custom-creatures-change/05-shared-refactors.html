@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ededed">
+  <title>Shared refactors — Custom Creatures change record</title>
+  <meta name="description" content="Change record for evo's light-theme Custom Creatures rebuild.">
+  <link rel="stylesheet" href="report.css">
+</head>
+<body>
+  <div class="marker" data-position="start">jjkk12345678910</div>
+  <header class="report-bar">
+    <a class="brand" href="index.html">EVO / Custom Creatures</a>
+    <span class="report-position">Section 05 / 10</span>
+  </header>
+
+<section class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">Section 05 / 10</p>
+    <h1>Shared refactors</h1>
+    <p class="hero-lead">The app and editor paths shared by the feature.</p>
+  </div>
+</section>
+<div class="report-shell">
+  <nav class="report-nav" aria-label="Report sections"><p class="kicker">Change record</p><ol><li><a href="01-rebuilt-on-existing-css.html">Rebuilt on the existing CSS</a></li><li><a href="02-custom-screen.html">The screen</a></li><li><a href="03-library-logic.html">Library logic</a></li><li><a href="04-drawing-designs.html">Drawing designs</a></li><li><a href="05-shared-refactors.html" aria-current="page">Shared refactors</a></li><li><a href="06-manifest-and-scanner.html">Manifest and scanner</a></li><li><a href="07-css-block.html">The CSS block</a></li><li><a href="08-tests.html">Tests</a></li><li><a href="09-documentation.html">Documentation</a></li><li><a href="10-verification-and-gaps.html">Verification and known gaps</a></li></ol></nav>
+  <main class="report-main">
+    <section class="section-heading">
+      <p class="eyebrow">Detailed record</p>
+      <h1>Shared refactors</h1>
+      <p class="hero-lead">The app and editor paths shared by the feature.</p>
+    </section>
+
+<h2>Why these refactors exist</h2>
+<p>The original Custom Creatures feature needed two capabilities that had previously lived inside individual screens: drawing an unopened design and launching a simulation with an action-specific saved brain. Those paths were extracted rather than duplicated.</p>
+
+<h2><code>js/ui/app.js</code></h2>
+<h3>Multi-action storage</h3>
+<p>Library entries can carry independent profiles for Running, Jumping, Obstacle Jump, Climbing and Flying. Storage normalizes known objective keys, keeps the compatibility <code>evolvedCreature</code> alias and updates one action without erasing the others.</p>
+<h3>Shared launch path</h3>
+<ul>
+  <li><code>App.launchSimulation(design, designId, objective, profile)</code> chooses objective settings, profile/default network settings and profile/default scene.</li>
+  <li>A supplied chromosome seeds <code>CurrentChromosomes</code>; its generation compatibility field is retained.</li>
+  <li>A My Creatures id is carried when present. A Custom Creatures simulation passes no id, preserving its read-only status.</li>
+  <li><code>App.chooseActionBrain</code> builds the five-action dialog. Saved actions are labelled with generation; missing actions are labelled for training.</li>
+</ul>
+<p>My Creatures and Custom Creatures both call these helpers, so chooser wording and continuation behavior cannot drift.</p>
+
+<h2><code>js/ui/editor.js</code></h2>
+<p>The editor delegates static render-model construction and initial camera framing to <code>EVO.ViewModel</code>. Selection overlays, pending-tool previews, hit behavior and the editor render loop remain in the editor. The extraction is deliberately narrow.</p>
+<pre><code>buildRenderModel: function () {
+  return EVO.ViewModel.buildRenderModel(this.builder.design);
+},
+
+frameDesign: function () {
+  EVO.ViewModel.frameDesign(this.builder.design, this.camera);
+}</code></pre>
+
+<h2>Script loading</h2>
+<p><code>index.html</code> loads <code>customLibrary.js</code> with core data, then <code>viewModel.js</code> after the renderer, and finally <code>custom.js</code> with the UI screens. The order supplies every dependency without a module loader or build step.</p>
+
+<h2>Restyle impact</h2>
+<div class="callout success"><p>The light rebuild does not change <code>app.js</code> or <code>editor.js</code>. Browser verification exercised the shared chooser through to a simulation after the new controls were installed.</p></div>
+
+    <nav class="page-turn" aria-label="Previous and next section">
+      <a href="04-drawing-designs.html"><small>Previous</small>Drawing designs</a>
+      <a href="06-manifest-and-scanner.html"><small>Next</small>Manifest and scanner</a>
+    </nav>
+  </main>
+</div>
+
+
+  <footer class="page-footer"><p>Recorded 5 October 2026 · branch <code>arena/01a109d4-evo</code> · rebuild <code>c591e5f</code></p></footer>
+  <div class="marker" data-position="end">jjkk12345678910</div>
+</body>
+</html>

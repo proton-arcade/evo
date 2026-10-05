@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ededed">
+  <title>Documentation — Custom Creatures change record</title>
+  <meta name="description" content="Change record for evo's light-theme Custom Creatures rebuild.">
+  <link rel="stylesheet" href="report.css">
+</head>
+<body>
+  <div class="marker" data-position="start">jjkk12345678910</div>
+  <header class="report-bar">
+    <a class="brand" href="index.html">EVO / Custom Creatures</a>
+    <span class="report-position">Section 09 / 10</span>
+  </header>
+
+<section class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">Section 09 / 10</p>
+    <h1>Documentation</h1>
+    <p class="hero-lead">README, cc guide and this HTML record.</p>
+  </div>
+</section>
+<div class="report-shell">
+  <nav class="report-nav" aria-label="Report sections"><p class="kicker">Change record</p><ol><li><a href="01-rebuilt-on-existing-css.html">Rebuilt on the existing CSS</a></li><li><a href="02-custom-screen.html">The screen</a></li><li><a href="03-library-logic.html">Library logic</a></li><li><a href="04-drawing-designs.html">Drawing designs</a></li><li><a href="05-shared-refactors.html">Shared refactors</a></li><li><a href="06-manifest-and-scanner.html">Manifest and scanner</a></li><li><a href="07-css-block.html">The CSS block</a></li><li><a href="08-tests.html">Tests</a></li><li><a href="09-documentation.html" aria-current="page">Documentation</a></li><li><a href="10-verification-and-gaps.html">Verification and known gaps</a></li></ol></nav>
+  <main class="report-main">
+    <section class="section-heading">
+      <p class="eyebrow">Detailed record</p>
+      <h1>Documentation</h1>
+      <p class="hero-lead">README, cc guide and this HTML record.</p>
+    </section>
+
+<h2>User-facing documentation</h2>
+<p>The root <code>README.md</code> documents Custom Creatures in the same vocabulary as the UI: featured creature, action rows, Explore, Simulate, safe copying, Copy JSON, file drop/picker, manifest generation and bad-file handling. Mobile guidance calls out snap-scrolling posters and Add file.</p>
+
+<h2>Folder documentation</h2>
+<p><code>cc/README.md</code> is the operational guide for maintainers and creature authors. It explains:</p>
+<ul>
+  <li>putting a file in <code>cc/</code> and regenerating the manifest;</li>
+  <li>the no-tooling file-drop path and its session lifetime;</li>
+  <li>validation and non-destructive copying;</li>
+  <li>the additive design-plus-<code>brains</code> file format;</li>
+  <li>editor import/export compatibility;</li>
+  <li>training and assembling a file with the headless tools;</li>
+  <li>the bundled <code>g8t7r</code> design and its five training results.</li>
+</ul>
+
+<h2>Code-level documentation</h2>
+<ul class="file-list">
+<li><code>js/core/customLibrary.js</code><span>States the error/warning distinction, folder limitations and copy guarantees.</span></li>
+<li><code>js/render/viewModel.js</code><span>Explains strict/safe models, framing regions and poster options.</span></li>
+<li><code>js/ui/custom.js</code><span>Describes the screen boundary and comments timing, drag/drop, clipboard and inert-background decisions.</span></li>
+<li><code>tools/scan-cc.js</code><span>Documents write and <code>--check</code> modes in usage output.</span></li>
+</ul>
+
+<h2>This change record</h2>
+<p><code>docs/custom-creatures-change/index.html</code> is the entry point. Each numbered subject has its own HTML file, all using one local stylesheet and no scripts, web fonts or network assets. The report can be opened directly from disk.</p>
+<div class="callout"><p>The requested marker is present as the first and last visible element of every report page, including the index.</p></div>
+
+<h2>Runtime isolation</h2>
+<p>The report directory is not linked from <code>index.html</code>, is not loaded by the app and does not affect the dependency-free runtime. It is a review artifact only.</p>
+
+    <nav class="page-turn" aria-label="Previous and next section">
+      <a href="08-tests.html"><small>Previous</small>Tests</a>
+      <a href="10-verification-and-gaps.html"><small>Next</small>Verification and known gaps</a>
+    </nav>
+  </main>
+</div>
+
+
+  <footer class="page-footer"><p>Recorded 5 October 2026 · branch <code>arena/01a109d4-evo</code> · rebuild <code>c591e5f</code></p></footer>
+  <div class="marker" data-position="end">jjkk12345678910</div>
+</body>
+</html>

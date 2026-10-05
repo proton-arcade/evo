@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ededed">
+  <title>Rebuilt on the existing CSS — Custom Creatures change record</title>
+  <meta name="description" content="Change record for evo's light-theme Custom Creatures rebuild.">
+  <link rel="stylesheet" href="report.css">
+</head>
+<body>
+  <div class="marker" data-position="start">jjkk12345678910</div>
+  <header class="report-bar">
+    <a class="brand" href="index.html">EVO / Custom Creatures</a>
+    <span class="report-position">Section 01 / 10</span>
+  </header>
+
+<section class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">Section 01 / 10</p>
+    <h1>Rebuilt on the existing CSS</h1>
+    <p class="hero-lead">The layout stayed. The borrowed theme did not.</p>
+  </div>
+</section>
+<div class="report-shell">
+  <nav class="report-nav" aria-label="Report sections"><p class="kicker">Change record</p><ol><li><a href="01-rebuilt-on-existing-css.html" aria-current="page">Rebuilt on the existing CSS</a></li><li><a href="02-custom-screen.html">The screen</a></li><li><a href="03-library-logic.html">Library logic</a></li><li><a href="04-drawing-designs.html">Drawing designs</a></li><li><a href="05-shared-refactors.html">Shared refactors</a></li><li><a href="06-manifest-and-scanner.html">Manifest and scanner</a></li><li><a href="07-css-block.html">The CSS block</a></li><li><a href="08-tests.html">Tests</a></li><li><a href="09-documentation.html">Documentation</a></li><li><a href="10-verification-and-gaps.html">Verification and known gaps</a></li></ol></nav>
+  <main class="report-main">
+    <section class="section-heading">
+      <p class="eyebrow">Detailed record</p>
+      <h1>Rebuilt on the existing CSS</h1>
+      <p class="hero-lead">The layout stayed. The borrowed theme did not.</p>
+    </section>
+
+<h2>The interpretation</h2>
+<p>The requested “same layout” is treated as a structural requirement, not a request to preserve the arcade skin. The hierarchy stays recognizable: a top bar, a cinematic featured region, shelves of posters, an alternate grid and a full-screen Explore view. The presentation now follows the application that contains it.</p>
+<div class="callout"><p><strong>Kept:</strong> content order, dimensions that create a cover-like hero, canvas artwork, fade into page color, five-second featured rotation, snap points, panel transition, toast and drop outline.</p></div>
+
+<h2>What was removed</h2>
+<ul>
+  <li>The <code>--cc-bg</code>, <code>--cc-bar</code>, <code>--cc-panel</code>, <code>--cc-deep</code>, red-accent and dark-scrollbar palette.</li>
+  <li>Scoped overrides that recolored <code>.top-bar</code>, <code>.back-button</code> and <code>.evo-button</code>.</li>
+  <li>The Arial-only type override and the Custom screen’s larger base font.</li>
+  <li>White-on-black text shadows, black cover gradients, glowing radial canvas background and white bone override.</li>
+  <li>One-off <code>.play-btn</code>, <code>.flat-btn</code>, <code>.ghost</code>, <code>.play-cta</code> and round icon-back control styles.</li>
+</ul>
+
+<h2>What replaced it</h2>
+<div class="cards">
+  <article class="card"><h3>Shared controls</h3><p>Actions are created with <code>UI.makeButton</code>, which supplies <code>.evo-button</code> and the shared primary modifier. Back remains the application’s <code>.back-button</code>.</p></article>
+  <article class="card"><h3>Shared color language</h3><p>The Custom screen uses the same light-grey background, off-white panels, neutral lines, dark ink and blue focus outline visible elsewhere in evo.</p></article>
+  <article class="card"><h3>Shared typography</h3><p>The app font is inherited. Interface labels use the existing uppercase, tracked-label convention; creature names and descriptive copy retain readable casing.</p></article>
+  <article class="card"><h3>Shared drawings</h3><p>Cover and poster canvases use <code>Renderer.COLORS</code> unchanged. Large covers opt into the same subtle grid primitive used by the editor.</p></article>
+</div>
+
+<h2>Layout contract</h2>
+<div class="table-wrap"><table><thead><tr><th>Area</th><th>Retained behavior</th><th>New visual treatment</th></tr></thead><tbody>
+<tr><td>Hero</td><td>70vh cover, responsive minimum, copy and action controls, fade.</td><td>Editor grid and palette; fade resolves to <code>#ededed</code>.</td></tr>
+<tr><td>Rows</td><td>Action-derived shelves, horizontal overflow and snap alignment.</td><td>Light outlined poster cards with ink labels.</td></tr>
+<tr><td>Grid</td><td>Remembered Rows/Grid preference.</td><td>Shared small and primary buttons indicate state.</td></tr>
+<tr><td>Explore</td><td>Slide from right, inert background, focus return, Esc/back close.</td><td>Normal app top bar, light cover, panel chips and shared actions.</td></tr>
+<tr><td>Feedback</td><td>Notices, live toast, drop outline and empty state.</td><td>Existing panel/line colors and app-blue focus/drop outline.</td></tr>
+</tbody></table></div>
+
+<h2>Files in the rebuild commit</h2>
+<ul class="file-list">
+<li><code>css/style.css</code><span>Replaces the dark Custom Creatures block with the scoped light implementation.</span></li>
+<li><code>js/ui/custom.js</code><span>Reuses top-bar and button patterns, and asks large cover drawings to show a grid.</span></li>
+<li><code>js/render/viewModel.js</code><span>Draws poster canvases with the editor renderer rather than a dark custom palette.</span></li>
+</ul>
+
+    <nav class="page-turn" aria-label="Previous and next section">
+      <a href="index.html"><small>Previous</small>Report index</a>
+      <a href="02-custom-screen.html"><small>Next</small>The screen</a>
+    </nav>
+  </main>
+</div>
+
+
+  <footer class="page-footer"><p>Recorded 5 October 2026 · branch <code>arena/01a109d4-evo</code> · rebuild <code>c591e5f</code></p></footer>
+  <div class="marker" data-position="end">jjkk12345678910</div>
+</body>
+</html>

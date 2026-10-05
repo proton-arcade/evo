@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ededed">
+  <title>The CSS block — Custom Creatures change record</title>
+  <meta name="description" content="Change record for evo's light-theme Custom Creatures rebuild.">
+  <link rel="stylesheet" href="report.css">
+</head>
+<body>
+  <div class="marker" data-position="start">jjkk12345678910</div>
+  <header class="report-bar">
+    <a class="brand" href="index.html">EVO / Custom Creatures</a>
+    <span class="report-position">Section 07 / 10</span>
+  </header>
+
+<section class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">Section 07 / 10</p>
+    <h1>The CSS block</h1>
+    <p class="hero-lead">The scoped light catalogue implementation.</p>
+  </div>
+</section>
+<div class="report-shell">
+  <nav class="report-nav" aria-label="Report sections"><p class="kicker">Change record</p><ol><li><a href="01-rebuilt-on-existing-css.html">Rebuilt on the existing CSS</a></li><li><a href="02-custom-screen.html">The screen</a></li><li><a href="03-library-logic.html">Library logic</a></li><li><a href="04-drawing-designs.html">Drawing designs</a></li><li><a href="05-shared-refactors.html">Shared refactors</a></li><li><a href="06-manifest-and-scanner.html">Manifest and scanner</a></li><li><a href="07-css-block.html" aria-current="page">The CSS block</a></li><li><a href="08-tests.html">Tests</a></li><li><a href="09-documentation.html">Documentation</a></li><li><a href="10-verification-and-gaps.html">Verification and known gaps</a></li></ol></nav>
+  <main class="report-main">
+    <section class="section-heading">
+      <p class="eyebrow">Detailed record</p>
+      <h1>The CSS block</h1>
+      <p class="hero-lead">The scoped light catalogue implementation.</p>
+    </section>
+
+<h2>Scope</h2>
+<p>The Custom Creatures block remains scoped beneath <code>.screen-custom</code> (or the unique <code>#ccDetails</code> panel), so its catalogue geometry does not alter Home, Editor, Simulation, Ecosystem or Gallery. The rebuild reduces the block from a theme-within-a-theme to layout and component-specific styling.</p>
+
+<h2>Palette mapping</h2>
+<div class="table-wrap"><table><thead><tr><th>Role</th><th>Value</th><th>Shared app precedent</th></tr></thead><tbody>
+<tr><td>Page / canvas</td><td><code>#ededed</code></td><td>Body, top bars and renderer background.</td></tr>
+<tr><td>Raised surface</td><td><code>#f7f7f7</code></td><td>Buttons, panels and floating controls.</td></tr>
+<tr><td>Primary ink</td><td><code>#1b1b1b</code></td><td>Body text and primary buttons.</td></tr>
+<tr><td>Lines</td><td><code>#cfcfcf</code> / <code>#dcdcdc</code></td><td>Controls and section boundaries.</td></tr>
+<tr><td>Muted copy</td><td><code>#6a6a6a</code></td><td>Secondary labels and help text.</td></tr>
+<tr><td>Focus / drop</td><td><code>#1b8ef2</code></td><td>Editor selection blue.</td></tr>
+<tr><td>Notice edge</td><td><code>#b03636</code></td><td>Shared danger red.</td></tr>
+</tbody></table></div>
+
+<h2>Deleted theme layer</h2>
+<p>The following no longer appear in the Custom CSS: dark custom properties, black panel backgrounds, white copy, red streaming-service accent, dark top-bar rules and selectors that recolor <code>.back-button</code> or <code>.evo-button</code>. Shared button rules now work without a scoped correction.</p>
+
+<h2>Typography</h2>
+<p>No screen-specific font family or 16px base override remains. Inherited Helvetica/Arial matches the app. Kicker, metadata, toolbar, row headings, poster labels, detail metadata and chips use uppercase plus measured letter spacing, matching evo’s existing control-label idiom.</p>
+
+<h2>Hero and cover fade</h2>
+<p>The canvas is light. A transparent-to-<code>#ededed</code> gradient fades its lower grid and creature into the copy area rather than darkening the image. Explore uses the same idea. Text shadows are unnecessary and were removed.</p>
+
+<h2>Rows and cards</h2>
+<ul>
+  <li>Horizontal galleries keep <code>scroll-snap-type: x proximity</code> and touch momentum.</li>
+  <li>Cards use neutral borders and the canvas background; hover lifts two pixels and darkens only the border.</li>
+  <li>The label fade resolves to the off-white panel color and uses dark uppercase text.</li>
+  <li>Grid remains auto-filling on wide screens and becomes two equal columns below 520px.</li>
+</ul>
+
+<h2>Explore layout</h2>
+<p>The panel is a flex column: shared top bar, independently scrolling main content and a light footer containing the shared primary Simulate button. This removes absolute custom header/footer skinning while keeping the full-screen slide transform.</p>
+
+<h2>Accessibility and motion</h2>
+<ul>
+  <li>Focus-visible outlines use high-contrast blue and a three-pixel separation.</li>
+  <li>Thin carousel marks retain enlarged pseudo-element hit areas.</li>
+  <li>Coarse-pointer sizing continues to come from the app’s global button rules.</li>
+  <li>The existing reduced-motion block disables transitions and animations inside the screen.</li>
+</ul>
+
+<h2>Rebuild diff</h2>
+<div class="change-stats"><div class="change-stat"><strong>254</strong><span>CSS insertions</span></div><div class="change-stat"><strong>370</strong><span>CSS deletions</span></div><div class="change-stat"><strong>0</strong><span>dark theme vars</span></div></div>
+
+    <nav class="page-turn" aria-label="Previous and next section">
+      <a href="06-manifest-and-scanner.html"><small>Previous</small>Manifest and scanner</a>
+      <a href="08-tests.html"><small>Next</small>Tests</a>
+    </nav>
+  </main>
+</div>
+
+
+  <footer class="page-footer"><p>Recorded 5 October 2026 · branch <code>arena/01a109d4-evo</code> · rebuild <code>c591e5f</code></p></footer>
+  <div class="marker" data-position="end">jjkk12345678910</div>
+</body>
+</html>
