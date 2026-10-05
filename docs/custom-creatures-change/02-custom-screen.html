@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ededed">
+  <title>The screen — Custom Creatures change record</title>
+  <meta name="description" content="Change record for evo's light-theme Custom Creatures rebuild.">
+  <link rel="stylesheet" href="report.css">
+</head>
+<body>
+  <div class="marker" data-position="start">jjkk12345678910</div>
+  <header class="report-bar">
+    <a class="brand" href="index.html">EVO / Custom Creatures</a>
+    <span class="report-position">Section 02 / 10</span>
+  </header>
+
+<section class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">Section 02 / 10</p>
+    <h1>The screen</h1>
+    <p class="hero-lead">DOM, state and interactions in js/ui/custom.js.</p>
+  </div>
+</section>
+<div class="report-shell">
+  <nav class="report-nav" aria-label="Report sections"><p class="kicker">Change record</p><ol><li><a href="01-rebuilt-on-existing-css.html">Rebuilt on the existing CSS</a></li><li><a href="02-custom-screen.html" aria-current="page">The screen</a></li><li><a href="03-library-logic.html">Library logic</a></li><li><a href="04-drawing-designs.html">Drawing designs</a></li><li><a href="05-shared-refactors.html">Shared refactors</a></li><li><a href="06-manifest-and-scanner.html">Manifest and scanner</a></li><li><a href="07-css-block.html">The CSS block</a></li><li><a href="08-tests.html">Tests</a></li><li><a href="09-documentation.html">Documentation</a></li><li><a href="10-verification-and-gaps.html">Verification and known gaps</a></li></ol></nav>
+  <main class="report-main">
+    <section class="section-heading">
+      <p class="eyebrow">Detailed record</p>
+      <h1>The screen</h1>
+      <p class="hero-lead">DOM, state and interactions in js/ui/custom.js.</p>
+    </section>
+
+<h2>Responsibility</h2>
+<p><code>js/ui/custom.js</code> is the DOM and interaction layer around pure library and rendering helpers. It owns screen lifecycle, manifest requests, temporary dropped files, rendering, carousel timing, the Explore panel and user-facing actions.</p>
+
+<h2>Screen lifecycle and state</h2>
+<ul>
+  <li><code>show()</code> initializes load status, featured index, view mode, panel state and transient drawing references, then builds, binds, renders and loads.</li>
+  <li><code>hide()</code> invalidates in-flight work with a token, stops rotation and timers, detaches document listeners and releases canvas references.</li>
+  <li><code>resize()</code> redraws the hero, every visible poster and the Explore cover without rebuilding the data model.</li>
+  <li>Files added by drop or picker live in module memory for the page session and can override a same-id manifest entry without writing into <code>cc/</code>.</li>
+</ul>
+
+<h2>Light rebuild changes</h2>
+<div class="table-wrap"><table><thead><tr><th>Before</th><th>After</th></tr></thead><tbody>
+<tr><td>Main screen had a top-bar-shaped helper but Explore used a custom translucent round back button.</td><td>One <code>makeTopBar(title, onBack, rightContent)</code> path builds both top bars; Explore says “Explore” and uses Back.</td></tr>
+<tr><td>Hero actions assembled bespoke icon buttons and classes.</td><td><code>UI.makeButton</code> creates Simulate, Copy and Explore; Simulate uses shared <code>primary</code>.</td></tr>
+<tr><td>Rows/Grid had standalone button styling.</td><td>Both use <code>.evo-button.small</code>; the active option uses shared <code>.primary</code> and still exposes <code>aria-pressed</code>.</td></tr>
+<tr><td>Explore copy/simulate controls used <code>ghost</code> and <code>play-cta</code>.</td><td>All three are shared evo buttons.</td></tr>
+<tr><td>Cover rendering assumed a dark poster implementation.</td><td>Hero and Explore pass <code>grid: true</code> to the shared light poster renderer.</td></tr>
+</tbody></table></div>
+
+<h2>Data loading</h2>
+<p>The screen fetches <code>cc/index.json</code> with <code>cache: "no-store"</code>, sanitizes the manifest through <code>CustomLibrary.parseManifest</code>, then fetches every listed file. A monotonically increasing token prevents a stale refresh from replacing newer state after navigation or another refresh.</p>
+<p>File-picker and drop input share <code>addFiles</code>. Inputs must end in <code>.json</code> and stay below 8 MB before the library parser runs. Failures remain visible by filename; valid session files are merged into the shelf.</p>
+
+<h2>Rendering and navigation</h2>
+<ul>
+  <li>The first six entries can rotate as featured creatures every five seconds.</li>
+  <li>Rotation pauses on hover, keyboard focus, an open panel, an app modal, a hidden tab or reduced-motion preference.</li>
+  <li>Rows are produced from library data; poster buttons carry descriptive accessible labels and open Explore.</li>
+  <li>Explore marks the page behind it inert and <code>aria-hidden</code>, focuses Back, closes on Escape and returns focus to its opener.</li>
+  <li>Notices are alerts/status messages; the toast is an atomic polite live region.</li>
+</ul>
+
+<h2>Actions</h2>
+<ul class="file-list">
+<li><code>Simulate</code><span>Calls the shared action-brain chooser without first adding the design to My Creatures.</span></li>
+<li><code>Copy</code><span>Calls idempotent library logic and reports created, topped-up or already-present state.</span></li>
+<li><code>Copy JSON</code><span>Uses the Clipboard API in a secure context and falls back to a selected read-only textarea modal.</span></li>
+<li><code>Add file / drop</code><span>Parses into session state; never writes to the repository or browser library.</span></li>
+</ul>
+
+    <nav class="page-turn" aria-label="Previous and next section">
+      <a href="01-rebuilt-on-existing-css.html"><small>Previous</small>Rebuilt on the existing CSS</a>
+      <a href="03-library-logic.html"><small>Next</small>Library logic</a>
+    </nav>
+  </main>
+</div>
+
+
+  <footer class="page-footer"><p>Recorded 5 October 2026 · branch <code>arena/01a109d4-evo</code> · rebuild <code>c591e5f</code></p></footer>
+  <div class="marker" data-position="end">jjkk12345678910</div>
+</body>
+</html>

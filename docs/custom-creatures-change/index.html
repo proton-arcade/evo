@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ededed">
+  <title>Overview — Custom Creatures change record</title>
+  <meta name="description" content="Change record for evo's light-theme Custom Creatures rebuild.">
+  <link rel="stylesheet" href="report.css">
+</head>
+<body>
+  <div class="marker" data-position="start">jjkk12345678910</div>
+  <header class="report-bar">
+    <a class="brand" href="index.html">EVO / Custom Creatures</a>
+    <span class="report-position">Index · 10 sections</span>
+  </header>
+
+<section class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">Implementation report · complete</p>
+    <h1>Custom Creatures, rebuilt in evo’s own light UI</h1>
+    <p class="hero-lead">The streaming-catalogue structure remains: a featured cover, horizontal poster rows, a Rows/Grid switch and a slide-in Explore view. The borrowed dark arcade skin does not. Controls, type, surfaces, lines and creature drawings now belong to the same visual system as the editor and the rest of the app.</p>
+    <div class="hero-meta" role="group" aria-label="Status">
+      <span class="status pass">38 / 38 test files pass</span>
+      <span class="status pass">Manifest current</span>
+      <span class="status pass">Desktop + phone checked</span>
+      <span class="status">No runtime dependencies added</span>
+    </div>
+  </div>
+</section>
+<div class="report-shell">
+  <nav class="report-nav" aria-label="Report sections"><p class="kicker">Change record</p><ol><li><a href="01-rebuilt-on-existing-css.html">Rebuilt on the existing CSS</a></li><li><a href="02-custom-screen.html">The screen</a></li><li><a href="03-library-logic.html">Library logic</a></li><li><a href="04-drawing-designs.html">Drawing designs</a></li><li><a href="05-shared-refactors.html">Shared refactors</a></li><li><a href="06-manifest-and-scanner.html">Manifest and scanner</a></li><li><a href="07-css-block.html">The CSS block</a></li><li><a href="08-tests.html">Tests</a></li><li><a href="09-documentation.html">Documentation</a></li><li><a href="10-verification-and-gaps.html">Verification and known gaps</a></li></ol></nav>
+  <main class="report-main">
+    <section class="section-heading">
+      <p class="eyebrow">Change record</p>
+      <h1>What changed, why it changed and what was checked</h1>
+      <p class="hero-lead">One HTML page is provided for each section. This index is the reading order and the short version.</p>
+    </section>
+
+    <div class="callout success">
+      <p><strong>Interpretation used.</strong> “Same layout” means preserving the Custom Creatures information architecture and interactions while replacing its visual theme with evo’s existing light CSS language.</p>
+    </div>
+
+    <div class="callout">
+      <p><strong>Theme follow-up.</strong> The app now has a Settings-controlled Light / Dark theme. Custom Creatures follows the global theme tokens and canvas palette; this does not restore the removed catalogue-only dark skin.</p>
+    </div>
+
+    <h2>Result</h2>
+    <div class="cards">
+      <article class="card"><h3>Presentation</h3><p>The scoped dark palette, custom type scale, dark top-bar overrides and one-off action-button skins were removed. The page now uses <code>#ededed</code>, <code>#f7f7f7</code>, the app’s line greys and <code>#1b1b1b</code> ink.</p></article>
+      <article class="card"><h3>Components</h3><p>Hero, view-switch, Explore and copy/simulate actions use <code>.evo-button</code>. Explore uses the same Back / title / right-slot top bar as the parent screen.</p></article>
+      <article class="card"><h3>Creature art</h3><p>Posters no longer invert bones for a dark canvas. <code>drawPoster</code> uses the editor background and renderer palette, with the renderer’s grid available as an option.</p></article>
+      <article class="card"><h3>Structure retained</h3><p>The cover fade, snap-scrolling shelves, Grid mode, slide-in panel, file drop affordance, notices, toast, keyboard behavior and reduced-motion treatment remain.</p></article>
+    </div>
+
+    <h2>Provenance</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Item</th><th>Reference</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>Base</td><td><code>4456678</code></td><td>Merge of PR #8; contains the original Custom Creatures feature.</td></tr>
+        <tr><td>Light rebuild</td><td><code>c591e5f31cbec6d984defd77294cf0f6b541186f</code></td><td>Reconstructed implementation on this tracked branch.</td></tr>
+        <tr><td>Prior handoff</td><td><code>358eaf3</code> / <code>4125ba3</code></td><td>Local-only hashes named in the handoff; they were not reachable from this checkout, so the work was reconstructed and verified here.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2>Implementation delta</h2>
+    <div class="change-stats">
+      <div class="change-stat"><strong>3</strong><span>runtime files</span></div>
+      <div class="change-stat"><strong>296</strong><span>insertions</span></div>
+      <div class="change-stat"><strong>440</strong><span>deletions</span></div>
+    </div>
+    <p>The report itself lives only under <code>docs/custom-creatures-change/</code> and does not enter the app’s script or stylesheet loading path.</p>
+
+    <h2>Read by section</h2>
+    <ol>
+      <li><a href="01-rebuilt-on-existing-css.html">Rebuilt on the existing CSS</a> — design interpretation and retained layout.</li>
+      <li><a href="02-custom-screen.html">The screen</a> — DOM, state, input and actions in <code>js/ui/custom.js</code>.</li>
+      <li><a href="03-library-logic.html">Library logic</a> — parsing, validation, rows and safe copying.</li>
+      <li><a href="04-drawing-designs.html">Drawing designs</a> — render models, framing and the light poster path.</li>
+      <li><a href="05-shared-refactors.html">Shared refactors</a> — simulation launch and editor delegation.</li>
+      <li><a href="06-manifest-and-scanner.html">Manifest and scanner</a> — deterministic discovery of <code>cc/</code>.</li>
+      <li><a href="07-css-block.html">The CSS block</a> — palette, selectors and responsive behavior.</li>
+      <li><a href="08-tests.html">Tests</a> — automated coverage and commands.</li>
+      <li><a href="09-documentation.html">Documentation</a> — user and maintainer guidance.</li>
+      <li><a href="10-verification-and-gaps.html">Verification and known gaps</a> — browser matrix, flows and boundaries.</li>
+    </ol>
+  </main>
+</div>
+
+
+  <footer class="page-footer"><p>Recorded 5 October 2026 · branch <code>arena/01a109d4-evo</code> · rebuild <code>c591e5f</code></p></footer>
+  <div class="marker" data-position="end">jjkk12345678910</div>
+</body>
+</html>

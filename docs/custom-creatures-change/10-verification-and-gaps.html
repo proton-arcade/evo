@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ededed">
+  <title>Verification and known gaps — Custom Creatures change record</title>
+  <meta name="description" content="Change record for evo's light-theme Custom Creatures rebuild.">
+  <link rel="stylesheet" href="report.css">
+</head>
+<body>
+  <div class="marker" data-position="start">jjkk12345678910</div>
+  <header class="report-bar">
+    <a class="brand" href="index.html">EVO / Custom Creatures</a>
+    <span class="report-position">Section 10 / 10</span>
+  </header>
+
+<section class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">Section 10 / 10</p>
+    <h1>Verification and known gaps</h1>
+    <p class="hero-lead">What was exercised and what remains outside the pass.</p>
+  </div>
+</section>
+<div class="report-shell">
+  <nav class="report-nav" aria-label="Report sections"><p class="kicker">Change record</p><ol><li><a href="01-rebuilt-on-existing-css.html">Rebuilt on the existing CSS</a></li><li><a href="02-custom-screen.html">The screen</a></li><li><a href="03-library-logic.html">Library logic</a></li><li><a href="04-drawing-designs.html">Drawing designs</a></li><li><a href="05-shared-refactors.html">Shared refactors</a></li><li><a href="06-manifest-and-scanner.html">Manifest and scanner</a></li><li><a href="07-css-block.html">The CSS block</a></li><li><a href="08-tests.html">Tests</a></li><li><a href="09-documentation.html">Documentation</a></li><li><a href="10-verification-and-gaps.html" aria-current="page">Verification and known gaps</a></li></ol></nav>
+  <main class="report-main">
+    <section class="section-heading">
+      <p class="eyebrow">Detailed record</p>
+      <h1>Verification and known gaps</h1>
+      <p class="hero-lead">What was exercised and what remains outside the pass.</p>
+    </section>
+
+<h2>Automated verification</h2>
+<div class="table-wrap"><table><thead><tr><th>Surface</th><th>Result</th><th>Evidence</th></tr></thead><tbody>
+<tr><td>Regression suite</td><td>Pass</td><td>38 / 38 Node test files.</td></tr>
+<tr><td>Manifest</td><td>Pass</td><td>One file listed; scanner <code>--check</code> clean.</td></tr>
+<tr><td>Changed JS syntax</td><td>Pass</td><td><code>node --check</code> on both files.</td></tr>
+<tr><td>Patch formatting</td><td>Pass</td><td><code>git diff --check</code> produced no output.</td></tr>
+<tr><td>Theme and Help follow-up</td><td>Pass</td><td>Persisted Light/Dark switching, canvas palettes, ten Help topics, search, expand/collapse and 390px layout.</td></tr>
+</tbody></table></div>
+
+<h2>Browser verification</h2>
+<p>A local static server and headless Chromium were used against the committed implementation. The pass collected computed styles, asserted component classes and captured untracked screenshots under <code>.scratch/</code>.</p>
+<div class="table-wrap"><table><thead><tr><th>Viewport</th><th>Checked</th><th>Result</th></tr></thead><tbody>
+<tr><td>1440 × 1000</td><td>Hero, fade/grid, all six rows, Rows/Grid switch, Explore transition and cover, top bars, chips and footer.</td><td>Pass</td></tr>
+<tr><td>390 × 844</td><td>Top-bar actions inside viewport, wrapped title, hero/actions, two-column grid preference and full Explore layout.</td><td>Pass</td></tr>
+</tbody></table></div>
+
+<h2>Behavior exercised after the restyle</h2>
+<ul>
+  <li>The screen loaded <code>g8t7r</code>, rendered one hero and six derived rows without console or page errors.</li>
+  <li>Computed screen and top-bar background were <code>rgb(237, 237, 237)</code>; screen ink was <code>rgb(27, 27, 27)</code>.</li>
+  <li>Hero actions were Simulate / Copy / Explore and every one carried <code>.evo-button</code>.</li>
+  <li>Grid mode produced <code>.search-grid</code> and persisted into the narrow-screen reload.</li>
+  <li>Explore exposed a shared <code>.back-button</code>, “Explore” top-bar title and shared evo actions.</li>
+  <li>Copy created one library design with five brains; pressing Copy again left exactly one design.</li>
+  <li>Simulate opened the five-action shared chooser and selecting an action reached <code>screen-simulation</code>.</li>
+</ul>
+
+<h2>Known gaps</h2>
+<div class="callout warning">
+  <p><strong>Not re-run after the visual rebuild:</strong> a real OS drag/drop gesture and successful system clipboard write. Both paths are outside the changed CSS/render/control construction, and their parser/fallback logic remains covered or unchanged, but this browser pass did not claim those two integrations.</p>
+</div>
+<ul>
+  <li>The Clipboard fallback is code-reviewed and was covered in the original feature verification, but this pass did not force a denied clipboard permission.</li>
+  <li>Only the bundled single-creature manifest was available, so automatic rotation between multiple featured entries was not visually replayed. Its pause rules are unchanged.</li>
+  <li>Screenshots are intentionally ignored scratch artifacts, not committed binary documentation.</li>
+</ul>
+
+<h2>Review conclusion</h2>
+<p>The rebuild changes presentation boundaries, canvas background treatment and component reuse without changing manifest, validation, storage or simulation semantics. Automated tests and browser flow checks agree with that boundary.</p>
+<div class="callout success"><p><strong>Ready for review:</strong> light rebuild commit <code>c591e5f31cbec6d984defd77294cf0f6b541186f</code>.</p></div>
+
+    <nav class="page-turn" aria-label="Previous and next section">
+      <a href="09-documentation.html"><small>Previous</small>Documentation</a>
+      <a href="index.html"><small>Next</small>Report index</a>
+    </nav>
+  </main>
+</div>
+
+
+  <footer class="page-footer"><p>Recorded 5 October 2026 · branch <code>arena/01a109d4-evo</code> · rebuild <code>c591e5f</code></p></footer>
+  <div class="marker" data-position="end">jjkk12345678910</div>
+</body>
+</html>

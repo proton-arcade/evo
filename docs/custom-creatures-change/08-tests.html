@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ededed">
+  <title>Tests — Custom Creatures change record</title>
+  <meta name="description" content="Change record for evo's light-theme Custom Creatures rebuild.">
+  <link rel="stylesheet" href="report.css">
+</head>
+<body>
+  <div class="marker" data-position="start">jjkk12345678910</div>
+  <header class="report-bar">
+    <a class="brand" href="index.html">EVO / Custom Creatures</a>
+    <span class="report-position">Section 08 / 10</span>
+  </header>
+
+<section class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">Section 08 / 10</p>
+    <h1>Tests</h1>
+    <p class="hero-lead">Automated regression and feature coverage.</p>
+  </div>
+</section>
+<div class="report-shell">
+  <nav class="report-nav" aria-label="Report sections"><p class="kicker">Change record</p><ol><li><a href="01-rebuilt-on-existing-css.html">Rebuilt on the existing CSS</a></li><li><a href="02-custom-screen.html">The screen</a></li><li><a href="03-library-logic.html">Library logic</a></li><li><a href="04-drawing-designs.html">Drawing designs</a></li><li><a href="05-shared-refactors.html">Shared refactors</a></li><li><a href="06-manifest-and-scanner.html">Manifest and scanner</a></li><li><a href="07-css-block.html">The CSS block</a></li><li><a href="08-tests.html" aria-current="page">Tests</a></li><li><a href="09-documentation.html">Documentation</a></li><li><a href="10-verification-and-gaps.html">Verification and known gaps</a></li></ol></nav>
+  <main class="report-main">
+    <section class="section-heading">
+      <p class="eyebrow">Detailed record</p>
+      <h1>Tests</h1>
+      <p class="hero-lead">Automated regression and feature coverage.</p>
+    </section>
+
+<h2>Complete regression run</h2>
+<p>Every dependency-free Node test in <code>tests/</code> was run after the rebuild:</p>
+<pre><code>for test in tests/*.js; do
+  node "$test"
+done</code></pre>
+<div class="callout success"><p><strong>Result:</strong> 38 of 38 test files passed. No test was skipped and the command exited successfully.</p></div>
+
+<h2>Feature-specific coverage</h2>
+<ul class="file-list">
+<li><code>tests/custom-library-logic-test.js</code><span>Good/design-only files; fallback names; malformed and dangling designs; brain mismatch warnings; objective rows; idempotent/non-destructive copies; manifest sanitization.</span></li>
+<li><code>tests/custom-creature-view-test.js</code><span>Render-model counts; safe filtering; camera fit on card, desktop hero and phone hero; editor framing invariants; manifest matches directory.</span></li>
+<li><code>tests/custom-creature-library-test.js</code><span>Validates every actual creature file and its five brain profiles while excluding the generated manifest.</span></li>
+<li><code>tests/creature-file-brain-export-test.js</code><span>Action brain export/import round trip and backward-compatible file shape.</span></li>
+<li><code>tests/editor-create-creature-test.js</code><span>Shared editor/simulation paths across objectives and batching scenarios.</span></li>
+<li><code>tests/evolved-creature-library-save-test.js</code><span>Independent action brains and in-place overwrite behavior relied on by copied files.</span></li>
+<li><code>tests/theme-help-ui-test.js</code><span>Theme persistence and normalization, DOM theme metadata, light/dark renderer and scene palettes, immediate redraw, Settings choices and searchable accordion Help structure.</span></li>
+</ul>
+
+<h2>Additional automated checks</h2>
+<pre><code>node --check js/ui/custom.js
+node --check js/render/viewModel.js
+node tools/scan-cc.js --check
+git diff --check</code></pre>
+<div class="table-wrap"><table><thead><tr><th>Check</th><th>Result</th></tr></thead><tbody>
+<tr><td>JavaScript syntax</td><td>Both changed scripts parsed.</td></tr>
+<tr><td>Manifest</td><td><code>cc/index.json is up to date (1 file).</code></td></tr>
+<tr><td>Patch whitespace</td><td>No errors.</td></tr>
+<tr><td>Forbidden dark selectors/variables probe</td><td>No scoped button recolor, dark palette variable or former dark surface found.</td></tr>
+</tbody></table></div>
+
+<h2>What the Node suite does not prove</h2>
+<p>Node checks geometry and logic but not layout, transitions, focus movement or browser storage. Those are covered by the headless browser pass documented in <a href="10-verification-and-gaps.html">Verification and known gaps</a>.</p>
+
+    <nav class="page-turn" aria-label="Previous and next section">
+      <a href="07-css-block.html"><small>Previous</small>The CSS block</a>
+      <a href="09-documentation.html"><small>Next</small>Documentation</a>
+    </nav>
+  </main>
+</div>
+
+
+  <footer class="page-footer"><p>Recorded 5 October 2026 · branch <code>arena/01a109d4-evo</code> · rebuild <code>c591e5f</code></p></footer>
+  <div class="marker" data-position="end">jjkk12345678910</div>
+</body>
+</html>

@@ -299,7 +299,7 @@
       Renderer.drawBackground(ctx, this.camera);
 
       if (!this.playback) {
-        ctx.fillStyle = '#9a9a9a';
+        ctx.fillStyle = Renderer.COLORS.marker;
         ctx.font = '16px "Helvetica Neue", Helvetica, Arial, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('No recording selected', this.camera.width / 2, this.camera.height / 2);

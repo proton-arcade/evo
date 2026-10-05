@@ -518,6 +518,13 @@
       Store.setString('LANGUAGE_KEY', v);
     },
 
+    get Theme() {
+      return Store.getString('THEME_KEY', 'light') === 'dark' ? 'dark' : 'light';
+    },
+    set Theme(v) {
+      Store.setString('THEME_KEY', v === 'dark' ? 'dark' : 'light');
+    },
+
     get ShowOnboarding() {
       return Store.getBool('SHOW_ONBOARDING_KEY', true);
     },
@@ -560,6 +567,44 @@
   };
 
   /* ------------------------------------------------------------------ *
+   * Theme — applies the saved light/dark appearance to both DOM and canvas
+   * renderers. Kept here so it runs in the document head before app startup.
+   * ------------------------------------------------------------------ */
+  var Theme = {
+    normalize: function (value) {
+      return value === 'dark' ? 'dark' : 'light';
+    },
+
+    apply: function (value, redraw) {
+      var theme = this.normalize(value);
+      var doc = global.document;
+      if (doc && doc.documentElement) {
+        var root = doc.documentElement;
+        if (typeof root.setAttribute === 'function') root.setAttribute('data-theme', theme);
+        if (root.style) root.style.colorScheme = theme;
+        var themeColor = doc.querySelector && doc.querySelector('meta[name="theme-color"]');
+        if (themeColor && typeof themeColor.setAttribute === 'function') {
+          themeColor.setAttribute('content', theme === 'dark' ? '#17191c' : '#ededed');
+        }
+      }
+      if (EVO.Renderer && typeof EVO.Renderer.setTheme === 'function') {
+        EVO.Renderer.setTheme(theme);
+      }
+      if (EVO.SceneTheme && typeof EVO.SceneTheme.setTheme === 'function') {
+        EVO.SceneTheme.setTheme(theme);
+      }
+      if (redraw !== false && EVO.App && EVO.App.current) {
+        if (typeof EVO.App.current.resize === 'function') EVO.App.current.resize();
+        else if (typeof EVO.App.current.render === 'function') EVO.App.current.render();
+      }
+      return theme;
+    },
+  };
+
+  // Applying in the head avoids a light flash before a saved dark theme loads.
+  Theme.apply(Settings.Theme, false);
+
+  /* ------------------------------------------------------------------ *
    * Misc DOM helpers
    * ------------------------------------------------------------------ */
   var UI = {
@@ -588,6 +633,7 @@
   EVO.RandomPicker = RandomPicker;
   EVO.Store = Store;
   EVO.Settings = Settings;
+  EVO.Theme = Theme;
   EVO.UI = UI;
 
   if (typeof module !== 'undefined' && module.exports) {

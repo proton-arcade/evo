@@ -33,8 +33,22 @@ run a multi-file interactive app from a local `file://` document.
 * **Ecosystem** — choose two to six creatures to inhabit one shared simulation world.
 * **Gallery** — saved movement replays of the best creature from a generation.
 * **Custom Creatures** — a catalogue of ready-made creatures with evolved brains, from the `cc/` folder or dropped in.
-* **Settings** — display, evolution and neural-network settings.
-* **Help** — a short explanation of the simulation.
+* **Settings** — light/dark theme, display, evolution and neural-network settings.
+* **Help** — searchable quick starts, controls, saving guidance and troubleshooting.
+
+---
+
+## Appearance and in-app help
+
+Choose **Settings → Display → Theme** to switch between **Light** and **Dark**. The choice applies
+immediately, is remembered in the browser and covers both the interface and canvas-rendered scenes,
+including the editor, simulations, gallery and Custom Creatures artwork. Resetting all settings returns
+the theme to Light.
+
+The **Help** screen is designed for quick answers rather than one long article. It has direct actions for
+starting a design or browsing creatures, a search field, Expand all / Collapse all controls and ten concise
+accordion topics covering first steps, design, evolution, controls, saves, Custom Creatures, Ecosystem,
+Gallery, wing behavior, troubleshooting and brain basics. A Settings shortcut is available from its top bar.
 
 ---
 
@@ -264,8 +278,8 @@ airtime after ground contact (plus a no-flap control), the automatic wing-flap r
 interrupt (in both the evolution loop and the ecosystem), editor-to-simulation scenarios, in-place
 action-brain/replay updates, creature-file export/import round trips that must keep the evolved action
 brains, the Custom Creatures logic (file checks, rows, idempotent copy, manifest, drawing a design without
-the editor), ecosystem selection and shared physics, floor friction, simulation playback, and mobile/touch
-layout checks.
+the editor), persisted light/dark canvas palettes, the searchable Help structure, ecosystem selection and
+shared physics, floor friction, simulation playback, and mobile/touch layout checks.
 
 ---
 

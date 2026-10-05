@@ -737,7 +737,7 @@
         })
       );
       actions.appendChild(
-        this.bigButton('Help', 'How the simulation works', function () {
+        this.bigButton('Help', 'Quick starts, controls and troubleshooting', function () {
           App.show('help');
         })
       );
@@ -938,6 +938,27 @@
 
       var appearance = Widgets.panel('Display');
       appearance.add(
+        Widgets.dropdown({
+          label: 'Theme',
+          value: Settings.Theme,
+          options: [
+            { value: 'light', label: 'Light' },
+            { value: 'dark', label: 'Dark' },
+          ],
+          onChange: function (value) {
+            Settings.Theme = value;
+            EVO.Theme.apply(Settings.Theme, true);
+          },
+        }).element
+      );
+      appearance.add(
+        UI.el(
+          'p',
+          'panel-note theme-setting-note',
+          'Changes immediately and is remembered in this browser, including canvas backgrounds and creature colours.'
+        )
+      );
+      appearance.add(
         Widgets.toggle({
           label: 'Show muscles',
           value: Settings.ShowMuscles,
@@ -1064,6 +1085,7 @@
                   'GRID_ENABLED',
                   'GRID_SIZE',
                   'LANGUAGE_KEY',
+                  'THEME_KEY',
                   'SHOW_ONBOARDING_KEY',
                   'AUTO_SAVE_ENABLED_KEY',
                   'AUTO_SAVE_DISTANCE_KEY',
@@ -1073,6 +1095,7 @@
                 ].forEach(function (key) {
                   Store.remove(key);
                 });
+                EVO.Theme.apply(Settings.Theme, false);
                 App.show('settings');
               });
             },
@@ -1117,76 +1140,307 @@
   var HelpScreen = {
     show: function () {
       var element = this.element;
-      element.appendChild(topBar('Help', function () { App.show('home'); }));
-      var content = UI.el('div', 'list-content help-content');
+      var settingsShortcut = UI.makeButton('Settings', 'small', function () {
+        App.show('settings');
+      });
+      element.appendChild(
+        topBar('Help', function () { App.show('home'); }, settingsShortcut)
+      );
 
-      var sections = [
+      var content = UI.el('div', 'list-content help-content');
+      var intro = UI.el('section', 'help-intro');
+      intro.appendChild(UI.el('div', 'help-eyebrow', 'Help centre'));
+      intro.appendChild(UI.el('h1', 'help-heading', 'What would you like to do?'));
+      intro.appendChild(
+        UI.el(
+          'p',
+          'help-lead',
+          'Start with a common task, or search the guide below. Topics are short and can be opened only when you need them.'
+        )
+      );
+      var quickActions = UI.el('div', 'help-quick-actions');
+      quickActions.appendChild(
+        UI.makeButton('Start building', 'primary', function () {
+          App.show('editor', { design: EVO.CreatureDesign.empty() });
+        })
+      );
+      quickActions.appendChild(
+        UI.makeButton('Browse examples', '', function () {
+          App.show('creatures');
+        })
+      );
+      quickActions.appendChild(
+        UI.makeButton('Custom Creatures', '', function () {
+          App.show('custom');
+        })
+      );
+      intro.appendChild(quickActions);
+      content.appendChild(intro);
+
+      var topics = [
         {
-          title: 'What is this?',
-          body:
-            'Evolution is a simulator that lets you design a creature out of joints, bones and muscles, ' +
-            'and then evolves a neural network that teaches it to walk, jump, climb or fly. ' +
-            'It is based on Karl Sims\' "Evolving Virtual Creatures" and on the original game by Keiwan Donyagard.',
+          title: 'Your first five minutes',
+          summary: 'Build a simple body, add one muscle and start an evolution run.',
+          keywords: 'new beginner begin tutorial quick start',
+          steps: [
+            'Choose Start building above, place at least three joints and connect them with bones.',
+            'Add a muscle between two different bones. A creature needs a muscle before its brain can move it.',
+            'Name and save the creature, then choose Simulate.',
+            'Pick Running first: it has a flat scene and makes changes easy to see.',
+            'Let several generations finish, then use Save Brain when you want to keep that action.',
+          ],
+          tip: 'A small, balanced creature is easier to evolve than a large design with many muscles.',
         },
         {
           title: 'Designing a creature',
-          body:
-            'Place joints with the joint tool, connect them with bones and add muscles between two bones. ' +
-            'Muscles contract or expand depending on the output of the creature\'s brain. ' +
-            'Use the Wing tool, or press W, then tap a bone to mark it as a wing; tap it again to remove the wing. Connect each wing to another bone with a muscle so contraction and expansion can power its flap. Use the settings panel to change weights and muscle strengths, adjust wing chord, and invert the powered stroke.',
+          summary: 'Joints, bones, muscles, wings, selection and editor shortcuts.',
+          keywords: 'editor joint bone muscle wing decor erase select undo redo chord strength weight',
+          paragraphs: [
+            'Place joints, connect pairs with bones and connect two bones with a muscle. Select any component to edit its weight, strength or other properties in the side panel.',
+            'For flight, use the Wing tool or press W and select a bone. Connect that wing to another bone with a muscle so contraction and expansion can power the stroke. Wing chord controls its effective area; Inverted reverses the powered direction.',
+          ],
+          bullets: [
+            'Use Samples if you want a working body to study before building your own.',
+            'Muscles with the same muscle id share one neural-network output.',
+            'Undo and Redo cover component placement, movement and property changes.',
+            'On touch screens, edit with one finger and pan or zoom with two fingers.',
+          ],
         },
         {
-          title: 'How the evolution works',
-          body:
-            'Every generation consists of a population of creatures. Each creature\'s brain is a small ' +
-            'feed forward neural network whose weights are the creature\'s genome. After each generation the ' +
-            'best creatures are selected and their genomes are recombined and mutated to form the next generation. ' +
-            'The fitness function depends on the task: running rewards horizontal distance, jumping the maximum ' +
-            'height, climbing the vertical distance, flying sustained time above the ground and average height, ' +
-            'and the obstacle jump rewards clearing an endless course of progressively larger blocks.',
+          title: 'Choosing a task and evolving',
+          summary: 'What each objective rewards and what happens between generations.',
+          keywords: 'simulation run jump obstacle climb fly fitness generation population mutation task objective',
+          paragraphs: [
+            'Each creature in a generation receives a neural network. The best genomes are selected, recombined and mutated to make the next generation. Settings changed during a run apply to the next generation where required.',
+          ],
+          bullets: [
+            'Running rewards horizontal distance on flat ground.',
+            'Jumping rewards maximum height.',
+            'Obstacle Jump rewards progress and clearing an endless course of blocks.',
+            'Climbing rewards vertical progress on stairs.',
+            'Flying rewards sustained airtime and average height after the initial drop.',
+          ],
+          tip: 'Start with the default population and mutation settings. Change one setting at a time so its effect is understandable.',
         },
         {
-          title: 'Brain inputs',
-          body:
-            'New simulations use the universal brain with 11 inputs: the distance to the ground, four distance ' +
-            'sensors (forward, down-forward, down-back, back), one freely rotating sensor, the velocity, the ' +
-            'angular velocity, the number of joints touching the ground and the rotation of the creature. ' +
-            'Additionally, the network has one output per unique muscle id (muscles sharing an id are ' +
-            'controlled together).',
+          title: 'Controls and shortcuts',
+          summary: 'The fastest keyboard, mouse and touch controls for each screen.',
+          keywords: 'keyboard mouse touch shortcut key pan zoom pause shock reset visibility editor',
+          shortcuts: [
+            ['Editor tools', 'V Select · J Joint · B Bone · W Wing · M Muscle · D Decor · E Erase'],
+            ['Editor history', 'Ctrl/Cmd+Z Undo · Ctrl/Cmd+Shift+Z Redo · Delete removes selection'],
+            ['Simulation', 'Space Pause/Resume · S Shock · V Visibility · R Reset camera'],
+            ['Camera', 'Drag to pan · mouse wheel to zoom · two fingers to pan and pinch'],
+            ['Dialogs', 'Escape closes a dialog or the Custom Creatures Explore panel'],
+          ],
         },
         {
-          title: 'Wing reflex and shock',
-          body:
-            'Creatures with wings automatically know to flap: while a winged creature is airborne or falling, ' +
-            'a built-in reflex drives its wing muscles through rhythmic downstrokes, so it does not have to ' +
-            'evolve flapping from scratch. The reflex rests while the creature stands on the ground and can be ' +
-            'switched off with the AUTO FLAP toggle in the simulation HUD. The Shock button (or the S key) ' +
-            'startles the creatures and interrupts whatever they are doing right now: their brains and reflexes ' +
-            'pause, their muscles relax and their motion dies down for a moment before normal behaviour resumes.',
+          title: 'Saving creatures, brains and runs',
+          summary: 'Know which save option to use and avoid losing trained actions.',
+          keywords: 'save brain replay run checkpoint creature export import gallery storage',
+          paragraphs: [
+            'A design and its action brains are related but saved separately by intent. Each action has its own brain, so saving Running does not replace Jumping, Climbing or Flying.',
+          ],
+          bullets: [
+            'Save Brain updates only the current action on the existing My Creatures entry.',
+            'Save Replay keeps a named movement recording in Gallery.',
+            'Save Run stores a simulation checkpoint that can continue later.',
+            'Export writes the design and all saved action brains to one compatible JSON file.',
+            'Import restores a design; files carrying brains are also stored in My Creatures.',
+          ],
         },
         {
-          title: 'Keyboard, mouse and touch',
-          body:
-            'Drag with the left mouse button to pan, use the scroll wheel or a pinch gesture to zoom. ' +
-            'On touch screens, drag with one finger to pan and use two fingers to pan and zoom. In the editor, ' +
-            'drag from one joint to another to create a bone and from one bone to another to create a muscle. ' +
-            'Use the Pause/Resume button or the space bar to pause and continue the simulation, and press S ' +
-            '(or use the Shock button) to shock the creatures and interrupt their current behaviour.',
+          title: 'Custom Creatures',
+          summary: 'Browse ready-made files, inspect their brains and copy or simulate them.',
+          keywords: 'custom creatures cc json file manifest drop add copy explore rows grid',
+          paragraphs: [
+            'Custom Creatures reads files listed by cc/index.json when the app is served over HTTP. You can also drop a JSON creature file onto the screen or use Add file; session files do not require the manifest.',
+          ],
+          bullets: [
+            'Explore shows the actions, generations and fitness values included in a file.',
+            'Simulate runs directly from the file and does not add it to My Creatures.',
+            'Copy is safe to press twice and never replaces an action brain you trained further.',
+            'Use node tools/scan-cc.js after adding a repository file to refresh the manifest.',
+          ],
         },
         {
-          title: 'Gallery',
-          body:
-            'Whenever a generation is evaluated, a recording of the best creature is kept. You can play back the ' +
-            'best creatures of all previous generations and save your favourites to the gallery.',
+          title: 'Ecosystem and Gallery',
+          summary: 'Run several residents together and replay saved movement.',
+          keywords: 'ecosystem residents shared world gallery recording replay playback',
+          paragraphs: [
+            'Ecosystem places two to six selected creatures in one shared objective scene. A saved action brain is reused when available; otherwise that resident receives a fresh exploratory brain.',
+            'Gallery plays recordings of generation champions and manually saved replays. Select a recording, play or scrub it, and use the same pan and zoom gestures as the simulation.',
+          ],
+        },
+        {
+          title: 'Wing reflex and Shock',
+          summary: 'Automatic flapping, AUTO FLAP and interrupting current behavior.',
+          keywords: 'wing reflex auto flap shock stun flying airborne muscle',
+          paragraphs: [
+            'A winged creature automatically flaps while airborne or falling, so evolution does not have to discover the basic rhythm from scratch. The reflex rests on the ground and can be disabled with AUTO FLAP.',
+            'Shock, or the S key, briefly pauses brains and reflexes, relaxes muscles and lets movement die down before normal behavior resumes. It is useful for seeing how a creature recovers.',
+          ],
+        },
+        {
+          title: 'Troubleshooting',
+          summary: 'Fix loading, storage, performance and file problems.',
+          keywords: 'problem error loading file local iphone ios storage performance slow json invalid clipboard appearance theme dark light',
+          bullets: [
+            'Use Settings → Display → Theme if you need a lighter or darker interface; the choice also changes canvas scenes.',
+            'If the loading message remains, open a hosted HTTP or HTTPS address instead of an iOS Files preview.',
+            'Keep index.html, css/, js/ and cc/ together when moving the project.',
+            'If Custom Creatures cannot read cc/, serve the folder over HTTP or use Add file instead.',
+            'If browser storage is unavailable, export files for anything you want to keep.',
+            'For a slow simulation, reduce population size, enable batches or shorten simulation time.',
+            'A rejected creature file names invalid JSON, missing references or duplicate ids in its notice.',
+          ],
+        },
+        {
+          title: 'How the brain works',
+          summary: 'A concise explanation of inputs, outputs and genetic learning.',
+          keywords: 'brain neural network genome input output sensor feed forward genetic algorithm technical',
+          paragraphs: [
+            'New brains use 11 universal inputs: ground distance, four fixed distance sensors, one rotating sensor, velocity, angular velocity, ground-contact count and creature rotation.',
+            'The network has one output per unique muscle id plus an output that rotates the free sensor. Evolution changes the network weights; it does not directly script a movement.',
+            'This approach follows Karl Sims’ Evolving Virtual Creatures and the original Evolution game by Keiwan Donyagard.',
+          ],
         },
       ];
 
-      sections.forEach(function (section) {
-        var panel = Widgets.panel(section.title);
-        panel.add(UI.el('p', 'panel-note', section.body));
-        content.appendChild(panel);
-      });
+      var tools = UI.el('section', 'help-tools');
+      var searchLabel = UI.el('label', 'help-search');
+      searchLabel.appendChild(UI.el('span', 'help-search-label', 'Search help'));
+      var searchInput = UI.el('input', 'help-search-input');
+      searchInput.type = 'search';
+      searchInput.placeholder = 'Try “save brain”, “touch” or “Custom Creatures”';
+      searchInput.autocomplete = 'off';
+      searchInput.setAttribute('aria-controls', 'helpTopics');
+      searchLabel.appendChild(searchInput);
+      tools.appendChild(searchLabel);
 
+      var toolActions = UI.el('div', 'help-tool-actions');
+      var expandAll = UI.makeButton('Expand all', 'small');
+      var collapseAll = UI.makeButton('Collapse all', 'small');
+      var clearSearch = UI.makeButton('Clear search', 'small');
+      clearSearch.hidden = true;
+      toolActions.appendChild(expandAll);
+      toolActions.appendChild(collapseAll);
+      toolActions.appendChild(clearSearch);
+      tools.appendChild(toolActions);
+      var resultStatus = UI.el('div', 'help-result-status');
+      resultStatus.setAttribute('role', 'status');
+      resultStatus.setAttribute('aria-live', 'polite');
+      tools.appendChild(resultStatus);
+      content.appendChild(tools);
+
+      var topicHost = UI.el('div', 'help-topics');
+      topicHost.id = 'helpTopics';
+      var topicElements = [];
+
+      var addList = function (host, items, ordered) {
+        if (!items || !items.length) return;
+        var list = UI.el(ordered ? 'ol' : 'ul', ordered ? 'help-steps' : 'help-bullets');
+        items.forEach(function (text) {
+          list.appendChild(UI.el('li', null, text));
+        });
+        host.appendChild(list);
+      };
+
+      topics.forEach(function (topic, index) {
+        var details = UI.el('details', 'help-topic');
+        details.open = index === 0;
+        var summary = UI.el('summary', 'help-topic-summary');
+        summary.appendChild(UI.el('span', 'help-topic-number', String(index + 1).padStart(2, '0')));
+        var summaryCopy = UI.el('span', 'help-topic-summary-copy');
+        summaryCopy.appendChild(UI.el('span', 'help-topic-title', topic.title));
+        summaryCopy.appendChild(UI.el('span', 'help-topic-description', topic.summary));
+        summary.appendChild(summaryCopy);
+        summary.appendChild(UI.el('span', 'help-topic-marker', '+'));
+        details.appendChild(summary);
+
+        var body = UI.el('div', 'help-topic-body');
+        (topic.paragraphs || []).forEach(function (text) {
+          body.appendChild(UI.el('p', null, text));
+        });
+        addList(body, topic.steps, true);
+        addList(body, topic.bullets, false);
+        if (topic.shortcuts) {
+          var shortcuts = UI.el('dl', 'help-shortcuts');
+          topic.shortcuts.forEach(function (entry) {
+            var row = UI.el('div', 'help-shortcut-row');
+            row.appendChild(UI.el('dt', null, entry[0]));
+            row.appendChild(UI.el('dd', null, entry[1]));
+            shortcuts.appendChild(row);
+          });
+          body.appendChild(shortcuts);
+        }
+        if (topic.tip) {
+          var tip = UI.el('p', 'help-tip');
+          tip.appendChild(UI.el('strong', null, 'Tip: '));
+          tip.appendChild(document.createTextNode(topic.tip));
+          body.appendChild(tip);
+        }
+        details.appendChild(body);
+        details.helpSearchText = [
+          topic.title,
+          topic.summary,
+          topic.keywords,
+          (topic.paragraphs || []).join(' '),
+          (topic.steps || []).join(' '),
+          (topic.bullets || []).join(' '),
+          (topic.shortcuts || []).map(function (entry) { return entry.join(' '); }).join(' '),
+        ].join(' ').toLowerCase();
+        topicElements.push(details);
+        topicHost.appendChild(details);
+      });
+      content.appendChild(topicHost);
+
+      var noResults = UI.el('div', 'help-no-results');
+      noResults.hidden = true;
+      noResults.appendChild(UI.el('strong', null, 'No help topic matched that search.'));
+      noResults.appendChild(
+        UI.el('p', null, 'Try a shorter phrase, or clear the search and browse all topics.')
+      );
+      content.appendChild(noResults);
+
+      var updateFilter = function () {
+        var query = searchInput.value.trim().toLowerCase();
+        var terms = query.split(/\s+/).filter(Boolean);
+        var visible = 0;
+        topicElements.forEach(function (topic) {
+          var matches = terms.every(function (term) {
+            return topic.helpSearchText.indexOf(term) >= 0;
+          });
+          topic.hidden = !matches;
+          if (matches) {
+            visible++;
+            if (query) topic.open = true;
+          }
+        });
+        clearSearch.hidden = !query;
+        noResults.hidden = visible !== 0;
+        resultStatus.textContent = query
+          ? 'Showing ' + visible + ' of ' + topicElements.length + ' topics'
+          : topicElements.length + ' help topics';
+      };
+
+      searchInput.addEventListener('input', updateFilter);
+      clearSearch.addEventListener('click', function () {
+        searchInput.value = '';
+        updateFilter();
+        searchInput.focus();
+      });
+      expandAll.addEventListener('click', function () {
+        topicElements.forEach(function (topic) {
+          if (!topic.hidden) topic.open = true;
+        });
+      });
+      collapseAll.addEventListener('click', function () {
+        topicElements.forEach(function (topic) {
+          topic.open = false;
+        });
+      });
+      updateFilter();
       element.appendChild(content);
     },
   };

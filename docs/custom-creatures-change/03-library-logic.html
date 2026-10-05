@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ededed">
+  <title>Library logic — Custom Creatures change record</title>
+  <meta name="description" content="Change record for evo's light-theme Custom Creatures rebuild.">
+  <link rel="stylesheet" href="report.css">
+</head>
+<body>
+  <div class="marker" data-position="start">jjkk12345678910</div>
+  <header class="report-bar">
+    <a class="brand" href="index.html">EVO / Custom Creatures</a>
+    <span class="report-position">Section 03 / 10</span>
+  </header>
+
+<section class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">Section 03 / 10</p>
+    <h1>Library logic</h1>
+    <p class="hero-lead">Parsing, validation, grouping and safe copying.</p>
+  </div>
+</section>
+<div class="report-shell">
+  <nav class="report-nav" aria-label="Report sections"><p class="kicker">Change record</p><ol><li><a href="01-rebuilt-on-existing-css.html">Rebuilt on the existing CSS</a></li><li><a href="02-custom-screen.html">The screen</a></li><li><a href="03-library-logic.html" aria-current="page">Library logic</a></li><li><a href="04-drawing-designs.html">Drawing designs</a></li><li><a href="05-shared-refactors.html">Shared refactors</a></li><li><a href="06-manifest-and-scanner.html">Manifest and scanner</a></li><li><a href="07-css-block.html">The CSS block</a></li><li><a href="08-tests.html">Tests</a></li><li><a href="09-documentation.html">Documentation</a></li><li><a href="10-verification-and-gaps.html">Verification and known gaps</a></li></ol></nav>
+  <main class="report-main">
+    <section class="section-heading">
+      <p class="eyebrow">Detailed record</p>
+      <h1>Library logic</h1>
+      <p class="hero-lead">Parsing, validation, grouping and safe copying.</p>
+    </section>
+
+<h2>Why the logic is separate</h2>
+<p><code>js/core/customLibrary.js</code> has no DOM dependency. It converts untrusted manifest/file input into shelf entries, derives labels and rows, and performs the non-destructive copy operation. That makes the behavior directly testable in Node and keeps presentation changes from changing data rules.</p>
+
+<h2>Manifest boundaries</h2>
+<p><code>parseManifest</code> accepts either <code>{ "files": [...] }</code> or a bare array. It keeps unique, plain, non-hidden <code>.json</code> filenames and rejects paths, <code>..</code>, <code>index.json</code>, non-strings and unsupported extensions. A manifest therefore cannot direct fetches outside <code>cc/</code>.</p>
+
+<h2>Two levels of file validation</h2>
+<div class="cards">
+  <article class="card"><h3>Errors reject a file</h3><ul><li>Invalid JSON or wrong top-level shape.</li><li>No joints or non-finite joint coordinates.</li><li>Duplicate joint, bone or muscle ids.</li><li>Bones with missing joints.</li><li>Muscles or decorations with missing bones.</li></ul></article>
+  <article class="card"><h3>Warnings keep the design</h3><p>A brain is omitted when its chromosome is not numeric, its network settings are invalid or its weight count does not match the design. Other fitting brains and the creature remain usable.</p></article>
+</div>
+<p>This distinction avoids the builder’s otherwise quiet normalization from showing a creature different from the file while still salvaging a sound design when one optional brain is bad.</p>
+
+<h2>Derived shelf data</h2>
+<ul>
+  <li>The name comes from trimmed file content, then the filename without <code>.json</code>, then “Unnamed”.</li>
+  <li>Joint, bone and muscle counts are computed once per entry.</li>
+  <li>Brains are normalized in canonical objective order and exposed as a lookup plus display list.</li>
+  <li>Text helpers build the hero summary and Explore chip labels, including generation and finite fitness.</li>
+  <li><code>buildRows</code> always emits “All creatures”, then only action rows that contain at least one match.</li>
+</ul>
+
+<h2>Non-destructive copy semantics</h2>
+<p><code>copyToMyCreatures</code> identifies an existing entry only when both its name and encoded design match. A same-named but geometrically different creature is separate. For an existing match, only action brains not already present are added; a brain trained further by the player is never overwritten.</p>
+<pre><code>first copy     → create one design + every fitting brain
+second copy    → same id, no duplicate, no replacement
+missing action → add only that action
+same name,
+different body → create a separate design</code></pre>
+
+<h2>Restyle impact</h2>
+<div class="callout success"><p>The light rebuild does not modify this file. Parsing, validation, row grouping and copy semantics remain byte-for-byte the behavior delivered by the original feature.</p></div>
+
+    <nav class="page-turn" aria-label="Previous and next section">
+      <a href="02-custom-screen.html"><small>Previous</small>The screen</a>
+      <a href="04-drawing-designs.html"><small>Next</small>Drawing designs</a>
+    </nav>
+  </main>
+</div>
+
+
+  <footer class="page-footer"><p>Recorded 5 October 2026 · branch <code>arena/01a109d4-evo</code> · rebuild <code>c591e5f</code></p></footer>
+  <div class="marker" data-position="end">jjkk12345678910</div>
+</body>
+</html>
