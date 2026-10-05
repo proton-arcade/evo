@@ -333,28 +333,7 @@
     },
 
     frameDesign: function () {
-      var design = this.builder.design;
-      if (!design.joints.length) {
-        this.camera.x = 0;
-        this.camera.y = 3;
-        this.camera.orthographicSize = 10;
-        return;
-      }
-      var minX = Infinity,
-        maxX = -Infinity,
-        minY = Infinity,
-        maxY = -Infinity;
-      design.joints.forEach(function (joint) {
-        minX = Math.min(minX, joint.x);
-        maxX = Math.max(maxX, joint.x);
-        minY = Math.min(minY, joint.y);
-        maxY = Math.max(maxY, joint.y);
-      });
-      var width = Math.max(6, maxX - minX);
-      var height = Math.max(6, maxY - minY);
-      this.camera.x = (minX + maxX) / 2;
-      this.camera.y = (minY + maxY) / 2;
-      this.camera.orthographicSize = Utils.clamp(Math.max(width * 0.75, height * 0.9), 3, 40);
+      EVO.ViewModel.frameDesign(this.builder.design, this.camera);
     },
 
     /* --- events ------------------------------------------------------ */
@@ -1439,62 +1418,7 @@
 
     /* --- rendering ---------------------------------------------------- */
     buildRenderModel: function () {
-      var design = this.builder.design;
-      var jointById = Object.create(null);
-      var joints = design.joints.map(function (data) {
-        var joint = {
-          data: data,
-          body: { x: data.x, y: data.y },
-        };
-        jointById[data.id] = joint;
-        return joint;
-      });
-
-      var boneById = Object.create(null);
-      var bones = design.bones.map(function (data) {
-        var bone = {
-          data: data,
-          startJoint: jointById[data.startJointID],
-          endJoint: jointById[data.endJointID],
-          center: { x: 0, y: 0 },
-          angle: 0,
-        };
-        if (bone.startJoint && bone.endJoint) {
-          bone.center.x = (bone.startJoint.body.x + bone.endJoint.body.x) / 2;
-          bone.center.y = (bone.startJoint.body.y + bone.endJoint.body.y) / 2;
-          bone.angle = Math.atan2(
-            -(bone.endJoint.body.x - bone.startJoint.body.x),
-            bone.endJoint.body.y - bone.startJoint.body.y
-          );
-        }
-        boneById[data.id] = bone;
-        return bone;
-      });
-
-      var muscles = design.muscles.map(function (data) {
-        return {
-          data: data,
-          startBone: boneById[data.startBoneID],
-          endBone: boneById[data.endBoneID],
-          muscleAction: EVO.Creature.MuscleAction.CONTRACT,
-          currentForce: 0,
-        };
-      });
-
-      var decorations = design.decorations.map(function (data) {
-        return {
-          data: data,
-          bone: boneById[data.boneId],
-          offset: data.offset,
-          scale: data.scale,
-          rotation: data.rotation,
-          flipX: data.flipX,
-          flipY: data.flipY,
-          decorationType: data.decorationType,
-        };
-      });
-
-      return { joints: joints, bones: bones, muscles: muscles, decorations: decorations };
+      return EVO.ViewModel.buildRenderModel(this.builder.design);
     },
 
     render: function () {

@@ -13,12 +13,16 @@ run a multi-file interactive app from a local `file://` document.
 
 ## Getting started
 
-1. Download or copy the entire folder — `index.html`, `css/`, and `js/` must stay together.
+1. Download or copy the entire folder — `index.html`, `css/`, and `js/` must stay together (keep `cc/`
+   too if you want the Custom Creatures screen to show the bundled creature).
 2. On desktop, open `index.html` with Chrome, Firefox, Edge, Safari or another modern browser.
 3. On iPhone or iPad, use a hosted `https://` address (or a local-network web server) rather than
    opening a `file://` copy from Safari or Files. Apple's document preview does not reliably load the
    sibling scripts that make the simulator interactive.
-4. (Optional) If your browser restricts local storage for a local page, everything still works — only
+4. (Optional) The Custom Creatures screen reads the `cc/` folder with `fetch`, which browsers block for
+   `file://` pages. Serve the folder over `http://` to see the files in `cc/`; dropping a creature file onto
+   the screen works either way.
+5. (Optional) If your browser restricts local storage for a local page, everything still works — only
    the in-browser save slots are disabled and you are asked to save as files instead.
 
 ### First steps
@@ -28,6 +32,7 @@ run a multi-file interactive app from a local `file://` document.
 * **My Creatures** — your saved designs with independent evolved brain profiles for each action (and the five samples: FROGGER, ROO, HAILER, SPIDER, SPRING).
 * **Ecosystem** — choose two to six creatures to inhabit one shared simulation world.
 * **Gallery** — saved movement replays of the best creature from a generation.
+* **Custom Creatures** — a catalogue of ready-made creatures with evolved brains, from the `cc/` folder or dropped in.
 * **Settings** — display, evolution and neural-network settings.
 * **Help** — a short explanation of the simulation.
 
@@ -104,6 +109,40 @@ finger to pan and use two fingers to pan and zoom.
 
 ---
 
+## Custom Creatures
+
+The **Custom Creatures** screen browses creature files — a design plus its evolved action brains, the same
+format the editor's Export writes — without importing them first. It follows a streaming-catalogue layout:
+
+* **Featured creature** — a large picture of the creature with its name, joint/bone/muscle counts and brain
+  summary, and **Simulate**, **Copy** and **Explore** buttons. Up to six creatures take turns every five
+  seconds; rotation pauses while the pointer or keyboard focus is on it, while the Explore panel is open and
+  when the tab is hidden, and it does not run at all if the system asks for reduced motion. The dots choose a
+  creature by hand.
+* **Rows** — *All creatures*, then one *Has a … brain* row per action (Running, Jumping, Obstacle Jump,
+  Climbing, Flying) that at least one creature has. Each poster is the creature drawn from its design, with a
+  badge counting its brains. A **Rows / Grid** toggle swaps the rows for a grid, and remembers the choice.
+* **Explore** — a slide-in panel with one chip per brain (action, generation and fitness), **Copy JSON** and
+  **Copy to My Creatures**. `Esc` or the back arrow closes it.
+* **Simulate** — pick an action and run the creature straight from the file, continuing from its saved brain
+  where it has one. The creature is not added to My Creatures unless you copy it.
+* **Copy to My Creatures** — stores the design with all its brains. Pressing it again does not add a second
+  copy, and it never replaces a brain you trained further; it only adds actions that creature has no brain for.
+  A same-named creature with a different design is added as a separate entry.
+* **Copy JSON** — copies the file's text to the clipboard. Where the browser refuses (for example from a
+  `file://` page) the text is shown in a dialog to select and copy.
+
+**Adding creatures.** Put `.json` files in `cc/` and run `node tools/scan-cc.js`, which writes the manifest
+`cc/index.json` (a browser cannot list a folder; `--check` reports whether it is current). Or drop a file onto
+the screen, or press **Add file** — no tooling needed, and the file stays until the page is closed.
+
+**Bad files.** A file needs only a design; its name falls back to the file name. A file the app would
+quietly change is not added — a bone or muscle that refers to something missing, duplicate ids, invalid
+JSON, an empty design — and a notice names the problem. A brain whose weights do not fit its design is left
+out with a notice, and the creature is still added. See [`cc/README.md`](cc/README.md).
+
+---
+
 ## Mobile and touch screens
 
 Evolution uses Pointer Events for touch input and works in current browsers with Pointer Events
@@ -119,6 +158,8 @@ message in local previews instead of leaving a blank screen.
   wheel zoom remains available on desktop.
 * **Gallery:** use two fingers on the recording canvas to pan and zoom the replay.
 * **Ecosystem:** tap multiple resident cards, then pan with one finger or pan/zoom with two fingers.
+* **Custom Creatures:** posters scroll sideways with snap points, the hero dots have enlarged tap areas, and
+  **Add file** replaces drag-and-drop where a file cannot be dragged in.
 * Controls have larger tap targets on touch devices, and editor panels, settings and recording lists
   can be scrolled with touch momentum. The layout adapts for narrow portrait and landscape screens.
 * Safe-area insets are respected on notched phones. Screen dimensions are refreshed after rotation,
@@ -143,6 +184,8 @@ message in local previews instead of leaving a blank screen.
   loaded into the editor as before. The `brains` entry is additive — the file keeps the plain
   `name`/`joints`/`bones`/`muscles`/`decorations` keys, so the Unity version and older web editions
   still read it and just ignore the brains. The browser-local Gallery replay reference is not exported.
+* **Custom Creatures** — creature files in `cc/` (or dropped onto that screen) are read-only. **Copy to My
+  Creatures** is how one becomes a library entry with its brains attached.
 * **Recordings** — **Save replay** stores a named movement recording in the Gallery. The brain save also
   keeps the best-generation replay for that action up to date.
 * **Simulations** — a simulation (settings, scene, best creatures, current chromosomes) can be saved
@@ -162,6 +205,7 @@ js/core/util.js             math helpers, capped display pixel ratio, touch gest
 js/core/network.js          feed-forward neural networks and network settings
 js/core/algorithms.js       selection, recombination, mutation, objectives and fitness utilities
 js/core/data.js             creature designs, stats, recordings, save data and encoding/decoding
+js/core/customLibrary.js     reads, checks and groups the creature files in cc/; copies them to My Creatures
 js/data/defaultCreatures.js the five sample creatures
 js/sim/physics.js           the 2D rigid body engine (bodies, joints, boxes, circles, raycasts, contacts)
 js/sim/scene.js             the simulation scenes (ground, walls, staircase, obstacle spawner, camera)
@@ -173,16 +217,19 @@ js/sim/ecosystem.js         multiple creatures in a shared physics world
 js/sim/playback.js          playback of recorded creatures
 js/render/decorations.js    the vector drawings of all decorations
 js/render/renderer.js       the canvas 2D renderer and the editor/simulation camera
+js/render/viewModel.js      draws a creature design without an editor (render model, framing, posters)
 js/ui/app.js                screens, widgets, modals, storage and the home/creature/settings/help screens
 js/ui/editor.js             the creature editor
 js/ui/simulation.js         the simulation screen (HUD, playback, save/load)
 js/ui/ecosystem.js           resident selection and shared-world ecosystem controls
 js/ui/gallery.js            the recording gallery
+js/ui/custom.js             the Custom Creatures screen (hero, poster rows, Explore panel)
 js/boot.js                  startup and error handling
 tools/                      headless helpers, not loaded by index.html
 tools/train-creature.js     trains one action brain for a creature file with the real evolution loop
 tools/build-creature-file.js assembles trained brains into an exportable creature file
-cc/                         custom creature files (design + evolved brains); not part of the app
+tools/scan-cc.js            writes cc/index.json, the list of creature files the Custom Creatures screen reads
+cc/                         custom creature files (design + evolved brains), shown on the Custom Creatures screen
 ```
 
 ---
@@ -216,7 +263,8 @@ The suite includes a deterministic muscle-driven flying creature that must take 
 airtime after ground contact (plus a no-flap control), the automatic wing-flap reflex and the shock
 interrupt (in both the evolution loop and the ecosystem), editor-to-simulation scenarios, in-place
 action-brain/replay updates, creature-file export/import round trips that must keep the evolved action
-brains, ecosystem selection and shared physics, floor friction, simulation playback, and mobile/touch
+brains, the Custom Creatures logic (file checks, rows, idempotent copy, manifest, drawing a design without
+the editor), ecosystem selection and shared physics, floor friction, simulation playback, and mobile/touch
 layout checks.
 
 ---

@@ -94,7 +94,7 @@ var files = fs.existsSync(ccDir)
   ? fs
       .readdirSync(ccDir)
       .filter(function (name) {
-        return name.slice(-5) === '.json';
+        return name.slice(-5) === '.json' && name !== 'index.json';
       })
       .sort()
   : [];
