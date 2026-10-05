@@ -624,6 +624,56 @@
       if (screen.resize) screen.resize();
     },
 
+    /**
+     * Starts a simulation of `design` for one action. `profile` is the saved
+     * brain to continue from (or null to train from scratch); `designId` is the
+     * My Creatures entry it belongs to, or null for a creature that is not saved.
+     */
+    launchSimulation: function (design, designId, objective, profile) {
+      App.setDesign(design, designId);
+      var settings = EVO.SimulationSettings.forObjective(objective);
+      var networkSettings = profile && profile.networkSettings
+        ? EVO.NeuralNetworkSettings.decode(profile.networkSettings)
+        : EVO.NeuralNetworkSettings.decode(Settings.NetworkSettings);
+      var scene = profile && profile.scene
+        ? EVO.SimulationSceneDescription.decode(profile.scene)
+        : EVO.DefaultSimulationScenes.defaultSceneForObjective(objective);
+      var data = EVO.SimulationData.create(
+        settings,
+        networkSettings,
+        EVO.CreatureDesign.clone(design),
+        scene
+      );
+      if (designId) data.LibraryCreatureId = designId;
+      if (profile && profile.chromosome && profile.chromosome.length) {
+        data.CurrentChromosomes = [profile.chromosome.slice()];
+        data.LastV2SimulatedGeneration = profile.lastV2SimulatedGeneration || 0;
+      }
+      App.show('simulation', { data: data, designId: designId });
+    },
+
+    /** The "Choose an action brain" dialog; `getProfile(objective)` finds a saved brain. */
+    chooseActionBrain: function (design, designId, getProfile) {
+      var actions = EVO.ObjectiveUtil.ALL_OBJECTIVES.map(function (objective) {
+        var profile = getProfile(objective);
+        var actionName = EVO.ObjectiveUtil.stringRepresentation(objective);
+        return {
+          label: profile
+            ? actionName + ' · saved Gen ' + profile.generation
+            : 'Train ' + actionName + ' brain',
+          primary: !!profile,
+          onClick: function () {
+            App.launchSimulation(design, designId, objective, profile);
+          },
+        };
+      });
+      Modal.open({
+        title: 'Choose an action brain',
+        message: 'Choose a task to train, or continue from that task’s saved brain. Saving a brain replaces only that task and updates its best-generation replay.',
+        actions: actions.concat([{ label: 'Cancel' }]),
+      });
+    },
+
     getDesign: function () {
       return this.currentDesign || EVO.CreatureDesign.empty();
     },
@@ -674,6 +724,11 @@
       actions.appendChild(
         this.bigButton('Gallery', 'Watch the best creatures you saved', function () {
           App.show('gallery');
+        })
+      );
+      actions.appendChild(
+        this.bigButton('Custom Creatures', 'Browse evolved creatures from the cc/ folder', function () {
+          App.show('custom');
         })
       );
       actions.appendChild(
@@ -793,42 +848,8 @@
             {
               label: 'Simulate',
               onClick: function () {
-                var actions = EVO.ObjectiveUtil.ALL_OBJECTIVES.map(function (objective) {
-                  var profile = Storage.getEvolvedBrain(entry, objective);
-                  var actionName = EVO.ObjectiveUtil.stringRepresentation(objective);
-                  return {
-                    label: profile
-                      ? actionName + ' · saved Gen ' + profile.generation
-                      : 'Train ' + actionName + ' brain',
-                    primary: !!profile,
-                    onClick: function () {
-                      App.setDesign(entry.design, entry.id);
-                      var settings = EVO.SimulationSettings.forObjective(objective);
-                      var networkSettings = profile && profile.networkSettings
-                        ? EVO.NeuralNetworkSettings.decode(profile.networkSettings)
-                        : EVO.NeuralNetworkSettings.decode(Settings.NetworkSettings);
-                      var scene = profile && profile.scene
-                        ? EVO.SimulationSceneDescription.decode(profile.scene)
-                        : EVO.DefaultSimulationScenes.defaultSceneForObjective(objective);
-                      var data = EVO.SimulationData.create(
-                        settings,
-                        networkSettings,
-                        EVO.CreatureDesign.clone(entry.design),
-                        scene
-                      );
-                      data.LibraryCreatureId = entry.id;
-                      if (profile && profile.chromosome && profile.chromosome.length) {
-                        data.CurrentChromosomes = [profile.chromosome.slice()];
-                        data.LastV2SimulatedGeneration = profile.lastV2SimulatedGeneration || 0;
-                      }
-                      App.show('simulation', { data: data, designId: entry.id });
-                    },
-                  };
-                });
-                Modal.open({
-                  title: 'Choose an action brain',
-                  message: 'Choose a task to train, or continue from that task’s saved brain. Saving a brain replaces only that task and updates its best-generation replay.',
-                  actions: actions.concat([{ label: 'Cancel' }]),
+                App.chooseActionBrain(entry.design, entry.id, function (objective) {
+                  return Storage.getEvolvedBrain(entry, objective);
                 });
               },
             },

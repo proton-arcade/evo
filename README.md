@@ -162,6 +162,7 @@ js/core/util.js             math helpers, capped display pixel ratio, touch gest
 js/core/network.js          feed-forward neural networks and network settings
 js/core/algorithms.js       selection, recombination, mutation, objectives and fitness utilities
 js/core/data.js             creature designs, stats, recordings, save data and encoding/decoding
+js/core/customLibrary.js     reads, checks and groups the creature files in cc/; copies them to My Creatures
 js/data/defaultCreatures.js the five sample creatures
 js/sim/physics.js           the 2D rigid body engine (bodies, joints, boxes, circles, raycasts, contacts)
 js/sim/scene.js             the simulation scenes (ground, walls, staircase, obstacle spawner, camera)
@@ -173,16 +174,19 @@ js/sim/ecosystem.js         multiple creatures in a shared physics world
 js/sim/playback.js          playback of recorded creatures
 js/render/decorations.js    the vector drawings of all decorations
 js/render/renderer.js       the canvas 2D renderer and the editor/simulation camera
+js/render/viewModel.js      draws a creature design without an editor (render model, framing, posters)
 js/ui/app.js                screens, widgets, modals, storage and the home/creature/settings/help screens
 js/ui/editor.js             the creature editor
 js/ui/simulation.js         the simulation screen (HUD, playback, save/load)
 js/ui/ecosystem.js           resident selection and shared-world ecosystem controls
 js/ui/gallery.js            the recording gallery
+js/ui/custom.js             the Custom Creatures screen (hero, poster rows, Explore panel)
 js/boot.js                  startup and error handling
 tools/                      headless helpers, not loaded by index.html
 tools/train-creature.js     trains one action brain for a creature file with the real evolution loop
 tools/build-creature-file.js assembles trained brains into an exportable creature file
-cc/                         custom creature files (design + evolved brains); not part of the app
+tools/scan-cc.js            writes cc/index.json, the list of creature files the Custom Creatures screen reads
+cc/                         custom creature files (design + evolved brains), shown on the Custom Creatures screen
 ```
 
 ---

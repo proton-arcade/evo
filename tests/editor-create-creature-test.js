@@ -111,6 +111,7 @@ global.EVO.App = {
 global.EVO.Screens = {};
 global.EVO.Settings.GridEnabled = false;
 global.EVO.Settings.GridSize = 1;
+require('../js/render/viewModel.js');
 require('../js/ui/editor.js');
 
 var EVO = global.EVO;

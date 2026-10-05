@@ -1,10 +1,31 @@
 # cc — custom creatures
 
-A drop folder for creature files. **Nothing in here is wired into the app**: `index.html`
-does not load it, and no runtime code reads it. It exists only as a place to keep custom
-creatures that already carry their evolved brains.
+A drop folder for creature files that already carry their evolved brains. They show up on
+the home screen under **Custom Creatures**: a featured creature, rows of posters, and an
+Explore panel per creature.
 
-## Using a file
+## Adding a file
+
+1. Put the `.json` file in this folder.
+2. Run `node tools/scan-cc.js` — a browser cannot list a folder, so this writes the
+   manifest `cc/index.json` that the screen reads. (`--check` verifies it is current; a test
+   does the same.)
+3. Serve the app over http. Opened straight from `file://`, the browser blocks reading
+   `cc/`; the screen then says so.
+
+No tooling needed: **drop a file onto the Custom Creatures screen** (or press **Add file**)
+and it appears at once. Files added that way last until the page is closed.
+
+A file only needs a design. Counts, brain chips and the poster are worked out when it is
+read, and the name falls back to the file name. A file the app would quietly change — a bone
+whose joint is missing, a muscle whose bone is missing, duplicate ids, invalid JSON — is
+not added; the screen shows a notice saying what is wrong. A brain whose weights do not fit
+the design is left out with a notice.
+
+**Copy** puts the creature in My Creatures with all its brains. Pressing it again does not
+add a second copy, and never replaces a brain you trained further.
+
+## Using a file in the editor
 
 Open the app, go to **Create a Creature → Import**, and paste the file's contents. The
 design loads into the editor and, because the file carries brains, the creature is also
