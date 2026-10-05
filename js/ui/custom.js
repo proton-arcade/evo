@@ -34,10 +34,6 @@
    * ------------------------------------------------------------------ */
   var SVG_NS = 'http://www.w3.org/2000/svg';
   var ICONS = {
-    play: 'M8 5v14l11-7z',
-    copy: 'M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z',
-    explore: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z',
-    back: 'M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z',
     file: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 7V3.5L18.5 9H13z',
   };
 
@@ -133,7 +129,13 @@
       });
       actions.appendChild(this.addButton);
       actions.appendChild(this.refreshButton);
-      this.topBar = this.makeTopBar(actions);
+      this.topBar = this.makeTopBar(
+        'Custom Creatures',
+        function () {
+          App.show('home');
+        },
+        actions
+      );
       element.appendChild(this.topBar);
 
       this.fileInput = UI.el('input');
@@ -172,20 +174,19 @@
       element.appendChild(this.toast);
     },
 
-    makeTopBar: function (rightContent) {
-      // Same bar as every other screen: back button, title, then our actions.
+    /** The same back/title/actions bar used throughout the app. */
+    makeTopBar: function (title, onBack, rightContent) {
       var bar = UI.el('div', 'top-bar');
       var back = UI.el('button', 'back-button');
       back.appendChild(UI.el('span', 'back-arrow', '\u2190'));
       back.appendChild(UI.el('span', null, 'Back'));
-      back.addEventListener('click', function () {
-        App.show('home');
-      });
+      back.addEventListener('click', onBack);
       bar.appendChild(back);
-      bar.appendChild(UI.el('div', 'top-bar-title', 'Custom Creatures'));
+      bar.appendChild(UI.el('div', 'top-bar-title', title));
       var right = UI.el('div', 'top-bar-right');
-      right.appendChild(rightContent);
+      if (rightContent) right.appendChild(rightContent);
       bar.appendChild(right);
+      bar.backButton = back;
       return bar;
     },
 
@@ -197,15 +198,11 @@
       panel.setAttribute('role', 'dialog');
       panel.setAttribute('aria-modal', 'true');
 
-      var header = UI.el('header');
-      this.detailsBack = UI.el('button', 'cc-icon-button');
-      this.detailsBack.setAttribute('aria-label', 'Back to Custom Creatures');
-      this.detailsBack.appendChild(icon('back', 24));
-      this.detailsBack.addEventListener('click', function () {
+      var header = this.makeTopBar('Explore', function () {
         self.closeDetails();
       });
-      header.appendChild(this.detailsBack);
-      header.appendChild(UI.el('h1', null, 'Explore'));
+      this.detailsBack = header.backButton;
+      this.detailsBack.setAttribute('aria-label', 'Back to Custom Creatures');
       panel.appendChild(header);
 
       var main = UI.el('main');
@@ -225,12 +222,10 @@
       this.detailsTags = UI.el('div', 'tag-row');
       this.detailsNotes = UI.el('div');
       var actions = UI.el('div', 'details-actions');
-      var copyJson = UI.el('button', 'ghost', 'Copy JSON');
-      copyJson.addEventListener('click', function () {
+      var copyJson = UI.makeButton('Copy JSON', '', function () {
         if (self.detailsEntry) self.copyJson(self.detailsEntry);
       });
-      var copyToMine = UI.el('button', 'ghost', 'Copy to My Creatures');
-      copyToMine.addEventListener('click', function () {
+      var copyToMine = UI.makeButton('Copy to My Creatures', '', function () {
         if (self.detailsEntry) self.copyToMyCreatures(self.detailsEntry);
       });
       actions.appendChild(copyJson);
@@ -243,8 +238,7 @@
       panel.appendChild(main);
 
       var footer = UI.el('footer');
-      var simulate = UI.el('button', 'play-cta', 'Simulate');
-      simulate.addEventListener('click', function () {
+      var simulate = UI.makeButton('Simulate', 'primary', function () {
         if (self.detailsEntry) self.simulate(self.detailsEntry);
       });
       footer.appendChild(simulate);
@@ -557,22 +551,13 @@
       content.appendChild(overview);
 
       var options = UI.el('div', 'options');
-      var simulate = UI.el('button', 'play-btn');
-      simulate.appendChild(icon('play', 22));
-      simulate.appendChild(UI.el('span', null, 'Simulate'));
-      simulate.addEventListener('click', function () {
+      var simulate = UI.makeButton('Simulate', 'primary', function () {
         self.simulate(self.currentFeatured());
       });
-      var copy = UI.el('button', 'flat-btn');
-      copy.appendChild(icon('copy', 24));
-      copy.appendChild(UI.el('span', null, 'Copy'));
-      copy.addEventListener('click', function () {
+      var copy = UI.makeButton('Copy', '', function () {
         self.copyToMyCreatures(self.currentFeatured());
       });
-      var explore = UI.el('button', 'flat-btn');
-      explore.appendChild(icon('explore', 24));
-      explore.appendChild(UI.el('span', null, 'Explore'));
-      explore.addEventListener('click', function () {
+      var explore = UI.makeButton('Explore', '', function () {
         self.openDetails(self.currentFeatured(), explore);
       });
       options.appendChild(simulate);
@@ -664,6 +649,7 @@
           right: 0.88,
           bottom: Math.max(0.3, Math.min(0.55, (textTop - 16) / height)),
         },
+        grid: true,
       });
     },
 
@@ -711,9 +697,8 @@
         ['rows', 'Rows'],
         ['grid', 'Grid'],
       ].forEach(function (option) {
-        var button = UI.el('button', null, option[1]);
-        button.setAttribute('aria-pressed', self.view === option[0] ? 'true' : 'false');
-        button.addEventListener('click', function () {
+        var selected = self.view === option[0];
+        var button = UI.makeButton(option[1], 'small' + (selected ? ' primary' : ''), function () {
           if (self.view === option[0]) return;
           self.view = option[0];
           EVO.Store.setString(VIEW_KEY, self.view);
@@ -721,6 +706,7 @@
           self.renderRows();
           self.drawPosters();
         });
+        button.setAttribute('aria-pressed', selected ? 'true' : 'false');
         group.appendChild(button);
       });
       this.toolbarEl.appendChild(group);
@@ -978,6 +964,7 @@
           right: 0.9,
           bottom: Math.max(0.5, 1 - (this.detailsTitle.offsetHeight + 12) / height),
         },
+        grid: true,
       });
     },
   };

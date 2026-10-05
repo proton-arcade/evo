@@ -15,6 +15,7 @@
 
   var EVO = (global.EVO = global.EVO || {});
   var Utils = EVO.Utils;
+  var Renderer = EVO.Renderer;
 
   /** Joint / bone / muscle / decoration entries wired together by id. */
   function buildRenderModel(design) {
@@ -151,19 +152,16 @@
     camera.y = (bounds.minY + bounds.maxY) / 2 + (regionCenterY - camera.height / 2) / pixelsPerUnit;
   }
 
-  /* The editor's palette is dark-on-light; posters sit on a dark page. */
-  var POSTER_COLORS = {
-    bone: '#d9d9d9',
-    muscleNeutral: '#e08e8a',
-  };
-
   /**
-   * Paints a design onto a canvas as cover art. The backing store is sized for
-   * the device pixel ratio, so call this again after the canvas changes size.
+   * Paints a design onto a canvas as cover art using the editor's own light
+   * background and creature palette. The backing store is sized for the
+   * device pixel ratio, so call this again after the canvas changes size.
    * Returns false when the canvas has no layout size yet or no 2D context.
    *
    * options.width / options.height  CSS pixel size (default: the element's)
    * options.region                  fitCamera region
+   * options.grid                    true, or a numeric grid visibility
+   * options.gridSize                world-unit grid spacing (default: setting)
    */
   function drawPoster(canvas, design, options) {
     options = options || {};
@@ -184,34 +182,21 @@
     fitCamera(design, camera, options.region);
 
     ctx.save();
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-
-    var glow = ctx.createRadialGradient(
-      width / 2,
-      height * 0.4,
-      Math.min(width, height) * 0.05,
-      width / 2,
-      height * 0.4,
-      Math.max(width, height) * 0.8
-    );
-    glow.addColorStop(0, '#383838');
-    glow.addColorStop(1, '#141414');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, width, height);
-
-    var colors = EVO.Renderer.COLORS;
-    var saved = { bone: colors.bone, muscleNeutral: colors.muscleNeutral };
-    colors.bone = POSTER_COLORS.bone;
-    colors.muscleNeutral = POSTER_COLORS.muscleNeutral;
     try {
-      EVO.Renderer.drawCreature(ctx, buildSafeRenderModel(design), camera, {
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      Renderer.drawBackground(ctx, camera);
+      if (options.grid) {
+        var visibility = typeof options.grid === 'number' ? options.grid : 0.45;
+        var gridSize =
+          options.gridSize || (EVO.Settings && EVO.Settings.GridSize) || 1;
+        Renderer.drawGrid(ctx, camera, visibility, gridSize);
+      }
+      Renderer.drawCreature(ctx, buildSafeRenderModel(design), camera, {
         opacity: 1,
         showMuscles: true,
         showContraction: false,
       });
     } finally {
-      colors.bone = saved.bone;
-      colors.muscleNeutral = saved.muscleNeutral;
       ctx.restore();
     }
     return true;
