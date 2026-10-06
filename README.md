@@ -9,6 +9,11 @@ folder directly with no build step or package manager. For a phone or tablet, se
 static web host or local web server and open its `http://` or `https://` address; iOS does not reliably
 run a multi-file interactive app from a local `file://` document.
 
+A separate [single-file edition](standalone/index.html) bundles the app's HTML, styles and scripts into one
+page, keeps the in-app Help centre, and omits the Custom Creatures catalogue. See
+[`standalone/README.md`](standalone/README.md) for run and rebuild instructions; the full edition described
+below is unchanged.
+
 ---
 
 ## Getting started
@@ -239,10 +244,13 @@ js/ui/ecosystem.js           resident selection and shared-world ecosystem contr
 js/ui/gallery.js            the recording gallery
 js/ui/custom.js             the Custom Creatures screen (hero, poster rows, Explore panel)
 js/boot.js                  startup and error handling
-tools/                      headless helpers, not loaded by index.html
+standalone/index.html       generated single-file edition, retaining Help but omitting Custom Creatures
+standalone/README.md        run and rebuild instructions for the single-file edition
+tools/                      headless helpers and build tools, not loaded by index.html
 tools/train-creature.js     trains one action brain for a creature file with the real evolution loop
 tools/build-creature-file.js assembles trained brains into an exportable creature file
 tools/scan-cc.js            writes cc/index.json, the list of creature files the Custom Creatures screen reads
+tools/build-standalone.js   generates or checks standalone/index.html
 cc/                         custom creature files (design + evolved brains), shown on the Custom Creatures screen
 ```
 
